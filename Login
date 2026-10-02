@@ -1,0 +1,2 @@
+git clone https://github.com/NRfitlab/Coach-OS.git
+cd coach-os
