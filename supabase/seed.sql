@@ -1,0 +1,2 @@
+-- Volontairement vide : les données de référence sont dans les migrations,
+-- les données de démo dans supabase/demo/demo_data.sql (dev uniquement).
