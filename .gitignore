@@ -143,3 +143,8 @@ vite.config.ts.timestamp-*
 .vite/
 .env.local
 supabase/.temp
+
+node_modules
+dist
+.env.local
+.env*.local
