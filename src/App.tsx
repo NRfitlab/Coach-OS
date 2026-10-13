@@ -4,6 +4,9 @@ import { useAuth } from './auth/context'
 import { useMemberships, type Membership, type Role } from './auth/membership'
 import Login from './pages/Login'
 import CreateOrganization from './pages/CreateOrganization'
+import Athletes from './pages/Athletes'
+import AthleteNew from './pages/AthleteNew'
+import AthleteDetail from './pages/AthleteDetail'
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrateur',
@@ -79,8 +82,10 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
         <Route index element={<Accueil />} />
-        <Route path="athletes" element={<h1 className="text-xl font-semibold">Athlètes</h1>} />
-        <Route element={<AdminOnly />}>
+        <Route path="athletes" element={<Athletes />} />
+        <Route path="athletes/new" element={<AthleteNew />} />
+        <Route path="athletes/:id" element={<AthleteDetail />} />
+                <Route element={<AdminOnly />}>
           <Route path="organisation" element={<h1 className="text-xl font-semibold">Organisation</h1>} />
         </Route>
       </Route>
