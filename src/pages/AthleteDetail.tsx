@@ -4,10 +4,21 @@ import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
 import { useAthlete, useUpdateAthlete } from '../athletes/api'
 import AthleteForm from '../components/AthleteForm'
+import GoalsPanel from '../components/GoalsPanel'
+import ReferencesPanel from '../components/ReferencesPanel'
+import SensitivePanel from '../components/SensitivePanel'
 import {
   DAYS, DAY_LABEL, LEVEL_LABEL, STATUS_LABEL, equipmentLabel,
 } from '../domain/athlete'
 import { formatDate } from '../lib/utils'
+
+type Tab = 'profil' | 'objectifs' | 'references' | 'sensible'
+const TABS: { key: Tab; label: string; managerOnly?: boolean }[] = [
+  { key: 'profil', label: 'Profil' },
+  { key: 'objectifs', label: 'Objectifs' },
+    { key: 'references', label: 'Références' },
+  { key: 'sensible', label: 'Sensible', managerOnly: true },
+]
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -24,7 +35,7 @@ export default function AthleteDetail() {
   const userId = useAuth().session?.user.id
   const { data: athlete, isPending, isError, error } = useAthlete(id)
   const update = useUpdateAthlete()
-  const [tab, setTab] = useState<'profil' | 'sensible'>('profil')
+  const [tab, setTab] = useState<Tab>('profil')
   const [editing, setEditing] = useState(false)
 
   if (isPending) return <p className="text-slate-500">Chargement…</p>
@@ -49,16 +60,12 @@ export default function AthleteDetail() {
       <h1 className="text-xl font-semibold">{athlete.full_name}</h1>
 
       <div className="flex gap-4 border-b text-sm">
-        <button onClick={() => setTab('profil')}
-          className={tab === 'profil' ? 'border-b-2 border-slate-900 pb-2 font-semibold' : 'pb-2 text-slate-500'}>
-          Profil
-        </button>
-        {canManage && (
-          <button onClick={() => setTab('sensible')}
-            className={tab === 'sensible' ? 'border-b-2 border-slate-900 pb-2 font-semibold' : 'pb-2 text-slate-500'}>
-            Sensible
+        {TABS.filter((t) => !t.managerOnly || canManage).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={tab === t.key ? 'border-b-2 border-slate-900 pb-2 font-semibold' : 'pb-2 text-slate-500'}>
+            {t.label}
           </button>
-        )}
+        ))}
       </div>
 
       {tab === 'profil' && !editing && (
@@ -103,11 +110,15 @@ export default function AthleteDetail() {
         />
       )}
 
+      {tab === 'objectifs' && (
+        <GoalsPanel athleteId={athlete.id} organizationId={athlete.organization_id} canManage={canManage} />
+      )}
+
       {tab === 'sensible' && canManage && (
-        <div className="rounded-lg border bg-white p-6 text-sm text-slate-600">
-          Section réservée au coach responsable et à l'administrateur. La saisie des blessures et
-          limitations, avec consentement horodaté, arrive à l'itération 2c.
-        </div>
+        <SensitivePanel athleteId={athlete.id} organizationId={athlete.organization_id} />
+      )}
+            {tab === 'references' && (
+        <ReferencesPanel athleteId={athlete.id} organizationId={athlete.organization_id} canManage={canManage} />
       )}
     </div>
   )
