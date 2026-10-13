@@ -7,17 +7,19 @@ import AthleteForm from '../components/AthleteForm'
 import GoalsPanel from '../components/GoalsPanel'
 import ReferencesPanel from '../components/ReferencesPanel'
 import SensitivePanel from '../components/SensitivePanel'
+import AthleteDataPanel from '../components/AthleteDataPanel'
 import {
   DAYS, DAY_LABEL, LEVEL_LABEL, STATUS_LABEL, equipmentLabel,
 } from '../domain/athlete'
 import { formatDate } from '../lib/utils'
 
-type Tab = 'profil' | 'objectifs' | 'references' | 'sensible'
+type Tab = 'profil' | 'objectifs' | 'references' | 'sensible' | 'donnees'
 const TABS: { key: Tab; label: string; managerOnly?: boolean }[] = [
   { key: 'profil', label: 'Profil' },
   { key: 'objectifs', label: 'Objectifs' },
     { key: 'references', label: 'Références' },
   { key: 'sensible', label: 'Sensible', managerOnly: true },
+    { key: 'donnees', label: 'Données', managerOnly: true },
 ]
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -117,6 +119,7 @@ export default function AthleteDetail() {
       {tab === 'sensible' && canManage && (
         <SensitivePanel athleteId={athlete.id} organizationId={athlete.organization_id} />
       )}
+            {tab === 'donnees' && canManage && <AthleteDataPanel athlete={athlete} />}
             {tab === 'references' && (
         <ReferencesPanel athleteId={athlete.id} organizationId={athlete.organization_id} canManage={canManage} />
       )}
