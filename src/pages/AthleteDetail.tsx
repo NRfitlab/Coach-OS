@@ -5,16 +5,18 @@ import type { Membership } from '../auth/membership'
 import { useAthlete, useUpdateAthlete } from '../athletes/api'
 import AthleteForm from '../components/AthleteForm'
 import GoalsPanel from '../components/GoalsPanel'
+import ReferencesPanel from '../components/ReferencesPanel'
 import SensitivePanel from '../components/SensitivePanel'
 import {
   DAYS, DAY_LABEL, LEVEL_LABEL, STATUS_LABEL, equipmentLabel,
 } from '../domain/athlete'
 import { formatDate } from '../lib/utils'
 
-type Tab = 'profil' | 'objectifs' | 'sensible'
+type Tab = 'profil' | 'objectifs' | 'references' | 'sensible'
 const TABS: { key: Tab; label: string; managerOnly?: boolean }[] = [
   { key: 'profil', label: 'Profil' },
   { key: 'objectifs', label: 'Objectifs' },
+    { key: 'references', label: 'Références' },
   { key: 'sensible', label: 'Sensible', managerOnly: true },
 ]
 
@@ -114,6 +116,9 @@ export default function AthleteDetail() {
 
       {tab === 'sensible' && canManage && (
         <SensitivePanel athleteId={athlete.id} organizationId={athlete.organization_id} />
+      )}
+            {tab === 'references' && (
+        <ReferencesPanel athleteId={athlete.id} organizationId={athlete.organization_id} canManage={canManage} />
       )}
     </div>
   )
