@@ -58,3 +58,11 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Schéma = migrations dans `supabase/migrations`, jamais d'édition manuelle en prod.
 - Une itération = une branche = une PR ; tag après validation (`v0.1-schema`…).
 - Pas de donnée réelle d'athlète sur le projet `dev`.
+
+## Séances : droits d'édition
+- Séance rattachée à un athlète : création par l'admin et le coach responsable de l'athlète ; modification et suppression par son créateur seul. Les assistants sont en lecture seule.
+- L'admin est en lecture seule sur les séances créées par les coachs. Il garde la suppression d'un athlète (la cascade ignore les politiques).
+- Modèles (séance sans athlète) : modifiables par l'admin et les coachs de l'organisation.
+- Copie de semaine : les séances copiées appartiennent à celui qui copie ; la destination se limite aux athlètes que l'utilisateur gère.
+- Suppression d'une assignation : coach responsable et admin (`can_manage_athlete`).
+- À prévoir avant l'interface multi-coach : transfert des séances lors d'une réassignation d'athlète (trigger sur `athletes.coach_id`). Si le créateur est supprimé, `created_by` passe à NULL et la séance n'est plus modifiable depuis l'application.
