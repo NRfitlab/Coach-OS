@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, NavLink, Outlet, Route, Routes, useOutletContext } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { useAuth } from './auth/context'
@@ -7,6 +8,8 @@ import CreateOrganization from './pages/CreateOrganization'
 import Athletes from './pages/Athletes'
 import AthleteNew from './pages/AthleteNew'
 import AthleteDetail from './pages/AthleteDetail'
+
+const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrateur',
@@ -85,6 +88,10 @@ export default function App() {
         <Route path="athletes" element={<Athletes />} />
         <Route path="athletes/new" element={<AthleteNew />} />
         <Route path="athletes/:id" element={<AthleteDetail />} />
+                <Route
+          path="athletes/:id/semaine"
+          element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><AthleteWeek /></Suspense>}
+        />
                 <Route element={<AdminOnly />}>
           <Route path="organisation" element={<h1 className="text-xl font-semibold">Organisation</h1>} />
         </Route>
