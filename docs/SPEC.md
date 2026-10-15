@@ -66,3 +66,9 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Copie de semaine : les séances copiées appartiennent à celui qui copie ; la destination se limite aux athlètes que l'utilisateur gère.
 - Suppression d'une assignation : coach responsable et admin (`can_manage_athlete`).
 - À prévoir avant l'interface multi-coach : transfert des séances lors d'une réassignation d'athlète (trigger sur `athletes.coach_id`). Si le créateur est supprimé, `created_by` passe à NULL et la séance n'est plus modifiable depuis l'application.
+
+## Budgets de performance
+- Liste de 50 athlètes affichée en moins de 1 s (4G, cache vide).
+- JavaScript initial inférieur à 200 ko compressés (mesure au 15/10/2026 : 182,69 ko). Un écran = un chunk chargé à la demande.
+- Une page = au plus 2 requêtes Supabase de données, sans cascade.
+- Page athlète (lien à jeton) : Lighthouse mobile ≥ 90 ; saisie d'une série sans réseau.
