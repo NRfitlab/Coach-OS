@@ -6,8 +6,8 @@ import { useMemberships, type Membership, type Role } from './auth/membership'
 import Login from './pages/Login'
 import CreateOrganization from './pages/CreateOrganization'
 import Athletes from './pages/Athletes'
-import AthleteNew from './pages/AthleteNew'
-import AthleteDetail from './pages/AthleteDetail'
+const AthleteNew = lazy(() => import('./pages/AthleteNew'))
+const AthleteDetail = lazy(() => import('./pages/AthleteDetail'))
 
 const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
 const WeekAll = lazy(() => import('./pages/WeekAll'))
@@ -43,7 +43,11 @@ function Layout({ email, membership }: { email: string; membership: Membership }
           Déconnexion
         </button>
       </header>
-      <main className="p-6"><Outlet context={membership} /></main>
+      <main className="p-6">
+  <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+    <Outlet context={membership} />
+  </Suspense>
+</main>
     </div>
   )
 }
