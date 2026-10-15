@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import {
   DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors,
   type DragEndEvent,
@@ -200,6 +201,11 @@ function Card({
         {w.planned_minutes !== null && <span className="text-slate-500">{w.planned_minutes} min</span>}
       </div>
       {w.notes && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{w.notes}</p>}
+           {w.athlete_id && (
+        <Link to={`/athletes/${w.athlete_id}/semaine/${w.id}`} className="mt-1 inline-block text-xs underline">
+          Ouvrir la séance
+        </Link>
+      )} 
       {!editable && <p className="mt-1 text-xs text-slate-400">Lecture seule</p>}
     </div>
   )

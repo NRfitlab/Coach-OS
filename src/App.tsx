@@ -11,6 +11,7 @@ const AthleteDetail = lazy(() => import('./pages/AthleteDetail'))
 
 const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
 const WeekAll = lazy(() => import('./pages/WeekAll'))
+const WorkoutBuilder = lazy(() => import('./pages/WorkoutBuilder'))
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrateur',
@@ -98,6 +99,10 @@ export default function App() {
           path="athletes/:id/semaine"
           element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><AthleteWeek /></Suspense>}
         />
+        <Route
+  path="athletes/:id/semaine/:workoutId"
+  element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><WorkoutBuilder /></Suspense>}
+/>
         <Route
   path="semaine"
   element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><WeekAll /></Suspense>}
