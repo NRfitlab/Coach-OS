@@ -6,11 +6,12 @@ import { useMemberships, type Membership, type Role } from './auth/membership'
 import Login from './pages/Login'
 import CreateOrganization from './pages/CreateOrganization'
 import Athletes from './pages/Athletes'
-import AthleteNew from './pages/AthleteNew'
-import AthleteDetail from './pages/AthleteDetail'
+const AthleteNew = lazy(() => import('./pages/AthleteNew'))
+const AthleteDetail = lazy(() => import('./pages/AthleteDetail'))
 
 const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
 const WeekAll = lazy(() => import('./pages/WeekAll'))
+const WorkoutBuilder = lazy(() => import('./pages/WorkoutBuilder'))
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrateur',
@@ -43,7 +44,11 @@ function Layout({ email, membership }: { email: string; membership: Membership }
           Déconnexion
         </button>
       </header>
-      <main className="p-6"><Outlet context={membership} /></main>
+      <main className="p-6">
+  <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+    <Outlet context={membership} />
+  </Suspense>
+</main>
     </div>
   )
 }
@@ -94,6 +99,10 @@ export default function App() {
           path="athletes/:id/semaine"
           element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><AthleteWeek /></Suspense>}
         />
+        <Route
+  path="athletes/:id/semaine/:workoutId"
+  element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><WorkoutBuilder /></Suspense>}
+/>
         <Route
   path="semaine"
   element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><WeekAll /></Suspense>}

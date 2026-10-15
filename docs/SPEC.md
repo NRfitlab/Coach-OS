@@ -72,3 +72,8 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - JavaScript initial inférieur à 200 ko compressés (mesure au 15/10/2026 : 182,69 ko). Un écran = un chunk chargé à la demande.
 - Une page = au plus 2 requêtes Supabase de données, sans cascade.
 - Page athlète (lien à jeton) : Lighthouse mobile ≥ 90 ; saisie d'une série sans réseau.
+
+## Builder (4a)
+- Écran séance : jusqu'à 4 requêtes de données en parallèle à froid (séance avec blocs et exercices, athlète, références, exercices). Les exercices (5 min) et l'athlète sont en cache en usage normal. Le budget de 2 requêtes vise les écrans de liste.
+- Droits : blocs et lignes suivent `can_edit_workout` (créateur seul ; assistants et admin en lecture).
+- Prescription en mode force uniquement. Une charge en % référence un 1RM daté de l'athlète pour l'exercice et n'est jamais stockée en kg.
