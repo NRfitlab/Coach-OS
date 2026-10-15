@@ -10,6 +10,7 @@ import AthleteNew from './pages/AthleteNew'
 import AthleteDetail from './pages/AthleteDetail'
 
 const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
+const WeekAll = lazy(() => import('./pages/WeekAll'))
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrateur',
@@ -27,6 +28,7 @@ function Layout({ email, membership }: { email: string; membership: Membership }
         <nav className="flex gap-4 text-sm">
           <NavLink to="/" end className={link}>Accueil</NavLink>
           <NavLink to="/athletes" className={link}>Athlètes</NavLink>
+          <NavLink to="/semaine" className={link}>Semaine</NavLink>
           {membership.role === 'admin' && (
             <NavLink to="/organisation" className={link}>Organisation</NavLink>
           )}
@@ -92,6 +94,10 @@ export default function App() {
           path="athletes/:id/semaine"
           element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><AthleteWeek /></Suspense>}
         />
+        <Route
+  path="semaine"
+  element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><WeekAll /></Suspense>}
+/>
                 <Route element={<AdminOnly />}>
           <Route path="organisation" element={<h1 className="text-xl font-semibold">Organisation</h1>} />
         </Route>
