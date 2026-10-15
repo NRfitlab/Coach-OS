@@ -1,16 +1,23 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
+import {
+  DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAthlete } from '../athletes/api'
 import {
-  useAddBlock, useAddExercise, useDeleteBlock, useDeleteExercise, useUpdateExercise, useWorkoutDetail,
-  type DetailData, type ExerciseData,
+  useAddBlock, useAddExercise, useDeleteBlock, useDeleteExercise, useReorderBlocks, useUpdateExercise,
+  useWorkoutDetail, type BlockData, type ExerciseData,
 } from '../athletes/builder'
 import { useExercises, useReferences, type ExerciseOption } from '../athletes/references'
 import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
+import { FieldsAdd, FieldsHeader, FieldsLine } from '../components/ExerciseFields'
 import type { Athlete } from '../domain/athlete'
 import { BLOCK_KINDS, BLOCK_LABEL } from '../domain/block'
-import { prescriptionSchema, type ForcePrescription, type ReferenceValue } from '../domain/prescription'
+import type { ReferenceValue } from '../domain/prescription'
+import { forceOfPrescription, latestOneRm } from '../domain/prescriptionFields'
 import {
   describeForce, estimatedSeconds, FORCE_SYNTAX, parseForce, prescriptionToText,
 } from '../domain/prescriptionText'
@@ -19,15 +26,18 @@ import { errMsg } from '../lib/errors'
 import { formatDate } from '../lib/utils'
 import { mondayOf } from '../lib/week'
 
+type View = 'fields' | 'text'
+const VIEW_KEY = 'coachos.builderView'
 const INPUT = 'rounded border px-2 py-1 text-sm'
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+const forceOf = (x: ExerciseData) => forceOfPrescription(x.prescription)
 
-const latestOneRm = (refs: Reference[], exerciseId: string) =>
-  refs.find((r) => r.kind === 'one_rm' && r.exercise_id === exerciseId)
-
-function forceOf(x: ExerciseData): ForcePrescription | null {
-  const r = prescriptionSchema.safeParse(x.prescription)
-  return r.success && r.data.mode === 'force' ? r.data : null
+function readView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'text' ? 'text' : 'fields'
+  } catch {
+    return 'fields'
+  }
 }
 
 function Line({ code, ex, name, refs, refValues, canEdit }: {
@@ -71,7 +81,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
         </form>
       ) : (
         <button disabled={!canEdit || !p} onClick={startEdit} className="text-left font-mono disabled:cursor-default">
-          {p ? describeForce(p, refValues) : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable en 4a)`}
+          {p ? describeForce(p, refValues) : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
         </button>
       )}
       {canEdit && !editing && (
@@ -166,12 +176,79 @@ function AddLine({ blockId, organizationId, nextPosition, exercises, refs }: {
   )
 }
 
+function BlockSection({ b, letter, organizationId, names, exercises, refs, refValues, canEdit, view, onDelete }: {
+  b: BlockData; letter: string; organizationId: string; names: Map<string, string>
+  exercises: ExerciseOption[]; refs: Reference[]; refValues: ReferenceValue[]
+  canEdit: boolean; view: View; onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: b.id,
+    disabled: !canEdit,
+  })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+  const lines = [...b.workout_exercises].sort((x, y) => x.position - y.position)
+  const nextEx = lines.reduce((m, x) => Math.max(m, x.position), 0) + 1
+
+  return (
+    <section
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-lg border bg-white p-3 ${isDragging ? 'relative z-20 opacity-80 shadow-lg' : ''}`}
+    >
+      <div className="mb-1 flex items-center gap-2">
+        {canEdit && (
+          <button
+            type="button" {...attributes} {...listeners} aria-label="Déplacer le bloc"
+            className="cursor-grab touch-none px-1 text-slate-400"
+          >
+            ⠿
+          </button>
+        )}
+        <h2 className="font-semibold">{letter} · {BLOCK_LABEL[b.kind]}</h2>
+        {b.kind === 'warmup' && <span className="text-xs text-slate-500">hors séries de travail</span>}
+        {canEdit && (
+          <button className="ml-auto text-sm text-red-600" onClick={onDelete}>Supprimer le bloc</button>
+        )}
+      </div>
+      {view === 'fields' && (lines.length > 0 || canEdit) && <FieldsHeader />}
+      <ul>
+        {lines.map((x, j) =>
+          view === 'fields' ? (
+            <FieldsLine
+              key={`${x.id}:${JSON.stringify(x.prescription)}`} code={`${letter}${j + 1}`} ex={x}
+              name={names.get(x.exercise_id) ?? 'Exercice inconnu'} refs={refs} refValues={refValues} canEdit={canEdit}
+            />
+          ) : (
+            <Line
+              key={x.id} code={`${letter}${j + 1}`} ex={x} name={names.get(x.exercise_id) ?? 'Exercice inconnu'}
+              refs={refs} refValues={refValues} canEdit={canEdit}
+            />
+          ),
+        )}
+      </ul>
+      {canEdit && (view === 'fields' ? (
+        <FieldsAdd
+          blockId={b.id} organizationId={organizationId} nextPosition={nextEx}
+          exercises={exercises} refs={refs} refValues={refValues}
+        />
+      ) : (
+        <AddLine blockId={b.id} organizationId={organizationId} nextPosition={nextEx} exercises={exercises} refs={refs} />
+      ))}
+    </section>
+  )
+}
+
 function Builder({ athlete, w, refs, exercises, canEdit }: {
-  athlete: Athlete; w: DetailData; refs: Reference[]; exercises: ExerciseOption[]; canEdit: boolean
+  athlete: Athlete
+  w: NonNullable<ReturnType<typeof useWorkoutDetail>['data']>
+  refs: Reference[]; exercises: ExerciseOption[]; canEdit: boolean
 }) {
   const [secPerRep, setSecPerRep] = useState(3)
+  const [view, setView] = useState<View>(readView)
   const addBlock = useAddBlock()
   const delBlock = useDeleteBlock()
+  const reorder = useReorderBlocks()
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const names = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
   const refValues: ReferenceValue[] = useMemo(
     () => refs.map((r) => ({
@@ -181,6 +258,23 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
   )
   const blocks = [...w.workout_blocks].sort((a, b) => a.position - b.position)
   const nextBlock = blocks.reduce((m, b) => Math.max(m, b.position), 0) + 1
+
+  const chooseView = (v: View) => {
+    setView(v)
+    try { localStorage.setItem(VIEW_KEY, v) } catch { /* stockage indisponible */ }
+  }
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const from = blocks.findIndex((b) => b.id === active.id)
+    const to = blocks.findIndex((b) => b.id === over.id)
+    if (from < 0 || to < 0) return
+    reorder.mutate({
+      workoutId: w.id,
+      organizationId: w.organization_id,
+      order: arrayMove(blocks, from, to).map((b) => ({ id: b.id, kind: b.kind })),
+    })
+  }
 
   let seconds = 0
   let working = 0
@@ -197,9 +291,21 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
   return (
     <div className="space-y-4">
       <Link to={back} className="text-sm text-slate-500 underline">← Semaine de {athlete.full_name}</Link>
-      <h1 className="text-xl font-semibold">
-        {w.title}{w.scheduled_on ? ` · ${formatDate(w.scheduled_on)}` : ''}
-      </h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">
+          {w.title}{w.scheduled_on ? ` · ${formatDate(w.scheduled_on)}` : ''}
+        </h1>
+        <div className="ml-auto inline-flex overflow-hidden rounded border text-sm" role="group" aria-label="Affichage">
+          {(['fields', 'text'] as const).map((v) => (
+            <button
+              key={v} type="button" onClick={() => chooseView(v)}
+              className={`px-3 py-1 ${view === v ? 'bg-slate-900 text-white' : 'bg-white'}`}
+            >
+              {v === 'fields' ? 'Champs' : 'Texte'}
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="text-sm text-slate-600">
         Séries de travail : {working} (hors échauffement) · Durée : ≈ {Math.round(seconds / 60)} min (estimé, repos prescrits inclus, hypothèse{' '}
         <input
@@ -209,41 +315,20 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
         />{' '}s par répétition)
       </p>
       {!canEdit && <p className="text-sm text-slate-500">Lecture seule.</p>}
-      {blocks.map((b, i) => {
-        const letter = String.fromCharCode(65 + i)
-        const lines = [...b.workout_exercises].sort((x, y) => x.position - y.position)
-        const nextEx = lines.reduce((m, x) => Math.max(m, x.position), 0) + 1
-        return (
-          <section key={b.id} className="rounded-lg border bg-white p-3">
-            <div className="mb-1 flex items-center gap-2">
-              <h2 className="font-semibold">{letter} · {BLOCK_LABEL[b.kind]}</h2>
-              {b.kind === 'warmup' && <span className="text-xs text-slate-500">hors séries de travail</span>}
-              {canEdit && (
-                <button
-                  className="ml-auto text-sm text-red-600"
-                  onClick={() => { if (window.confirm('Supprimer ce bloc et ses exercices ?')) delBlock.mutate(b.id) }}
-                >
-                  Supprimer le bloc
-                </button>
-              )}
-            </div>
-            <ul>
-              {lines.map((x, j) => (
-                <Line
-                  key={x.id} code={`${letter}${j + 1}`} ex={x} name={names.get(x.exercise_id) ?? 'Exercice inconnu'}
-                  refs={refs} refValues={refValues} canEdit={canEdit}
-                />
-              ))}
-            </ul>
-            {canEdit && (
-              <AddLine
-                blockId={b.id} organizationId={w.organization_id} nextPosition={nextEx}
-                exercises={exercises} refs={refs}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-4">
+            {blocks.map((b, i) => (
+              <BlockSection
+                key={b.id} b={b} letter={String.fromCharCode(65 + i)} organizationId={w.organization_id}
+                names={names} exercises={exercises} refs={refs} refValues={refValues}
+                canEdit={canEdit} view={view}
+                onDelete={() => { if (window.confirm('Supprimer ce bloc et ses exercices ?')) delBlock.mutate(b.id) }}
               />
-            )}
-          </section>
-        )
-      })}
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
       {canEdit && (
         <div className="flex flex-wrap gap-2">
           {BLOCK_KINDS.map((k) => (
@@ -257,8 +342,8 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
           ))}
         </div>
       )}
-      {(addBlock.isError || delBlock.isError) && (
-        <p role="alert" className="text-sm text-red-600">{errMsg(addBlock.error ?? delBlock.error)}</p>
+      {(addBlock.isError || delBlock.isError || reorder.isError) && (
+        <p role="alert" className="text-sm text-red-600">{errMsg(addBlock.error ?? delBlock.error ?? reorder.error)}</p>
       )}
     </div>
   )
@@ -278,7 +363,7 @@ export default function WorkoutBuilder() {
   }
   const failed = athlete.error ?? detail.error ?? refs.error ?? exercises.error
   if (failed) return <p role="alert" className="text-red-600">Erreur : {failed.message}</p>
-    if (!refs.data || !exercises.data) return <p className="text-slate-500">Chargement…</p>
+  if (!refs.data || !exercises.data) return <p className="text-slate-500">Chargement…</p>
   if (!athlete.data || !detail.data || detail.data.athlete_id !== id) {
     return (
       <div className="space-y-2">

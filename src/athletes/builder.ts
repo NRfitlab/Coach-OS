@@ -94,3 +94,35 @@ export const useDeleteExercise = () =>
     const { error } = await supabase.from('workout_exercises').delete().eq('id', id)
     if (error) throw error
   })
+  export function useReorderBlocks() {
+  const queryClient = useQueryClient()
+  const userId = useAuth().session?.user.id
+  return useMutation({
+    mutationFn: async (v: {
+      workoutId: string; organizationId: string; order: { id: string; kind: BlockKind }[]
+    }) => {
+      const rows = v.order.map((b, i) => ({
+        id: b.id, workout_id: v.workoutId, organization_id: v.organizationId, kind: b.kind, position: i + 1,
+      }))
+      const { error } = await supabase.from('workout_blocks').upsert(rows, { onConflict: 'id' })
+      if (error) throw error
+    },
+    onMutate: async (v) => {
+      const key = ['builder', userId, v.workoutId]
+      await queryClient.cancelQueries({ queryKey: key })
+      const previous = queryClient.getQueryData<DetailData | null>(key)
+      if (previous) {
+        const pos = new Map(v.order.map((b, i) => [b.id, i + 1]))
+        queryClient.setQueryData<DetailData>(key, {
+          ...previous,
+          workout_blocks: previous.workout_blocks.map((b) => ({ ...b, position: pos.get(b.id) ?? b.position })),
+        })
+      }
+      return { previous, key }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(ctx.key, ctx.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['builder'] }),
+  })
+}
