@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { Fragment, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import {
   DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
@@ -8,14 +8,17 @@ import { CSS } from '@dnd-kit/utilities'
 import { useAthlete } from '../athletes/api'
 import {
   useAddBlock, useAddExercise, useDeleteBlock, useDeleteExercise, useReorderBlocks, useUpdateExercise,
-  useWorkoutDetail, type BlockData, type ExerciseData,
+  useWorkoutDetail, type BlockData, type DetailData, type ExerciseData,
 } from '../athletes/builder'
 import { useExercises, useReferences, type ExerciseOption } from '../athletes/references'
 import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
-import { FieldsAdd, FieldsHeader, FieldsLine } from '../components/ExerciseFields'
+import { CourseHeader, CourseLine } from '../components/CourseFields'
+import { FieldsHeader, FieldsLine } from '../components/ExerciseFields'
+import { LineAdd } from '../components/LineAdd'
 import type { Athlete } from '../domain/athlete'
-import { BLOCK_KINDS, BLOCK_LABEL } from '../domain/block'
+import { BLOCK_KINDS, BLOCK_LABEL, blockKindsFor } from '../domain/block'
+import { courseOf, courseTotals, describeCourse, parseClock } from '../domain/course'
 import type { ReferenceValue } from '../domain/prescription'
 import { forceOfPrescription, latestOneRm } from '../domain/prescriptionFields'
 import {
@@ -27,10 +30,12 @@ import { formatDate } from '../lib/utils'
 import { mondayOf } from '../lib/week'
 
 type View = 'fields' | 'text'
+type LineType = 'force' | 'course'
 const VIEW_KEY = 'coachos.builderView'
 const INPUT = 'rounded border px-2 py-1 text-sm'
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const forceOf = (x: ExerciseData) => forceOfPrescription(x.prescription)
+const typeOf = (x: ExerciseData): LineType => (courseOf(x.prescription) ? 'course' : 'force')
 
 function readView(): View {
   try {
@@ -49,6 +54,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
   const [text, setText] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const p = forceOf(ex)
+  const c = courseOf(ex.prescription)
 
   const startEdit = () => {
     if (!p) return
@@ -81,7 +87,11 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
         </form>
       ) : (
         <button disabled={!canEdit || !p} onClick={startEdit} className="text-left font-mono disabled:cursor-default">
-          {p ? describeForce(p, refValues) : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
+          {p
+            ? describeForce(p, refValues)
+            : c
+              ? `${describeCourse(c, refValues)} (modifiable en vue Champs)`
+              : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
         </button>
       )}
       {canEdit && !editing && (
@@ -120,6 +130,7 @@ function AddLine({ blockId, organizationId, nextPosition, exercises, refs }: {
     e.preventDefault()
     setErr(null)
     if (!picked) return setErr('Choisissez un exercice dans la liste.')
+    if (picked.movement_slug === 'running') return setErr('Les lignes de course se saisissent en vue Champs.')
     const res = parseForce(text, latestOneRm(refs, picked.id)?.id ?? null)
     if (!res.ok) return setErr(res.error)
     try {
@@ -176,8 +187,10 @@ function AddLine({ blockId, organizationId, nextPosition, exercises, refs }: {
   )
 }
 
-function BlockSection({ b, letter, organizationId, names, exercises, refs, refValues, canEdit, view, onDelete }: {
-  b: BlockData; letter: string; organizationId: string; names: Map<string, string>
+function BlockSection({
+  b, letter, organizationId, quality, names, exercises, refs, refValues, canEdit, view, onDelete,
+}: {
+  b: BlockData; letter: string; organizationId: string; quality: string | null; names: Map<string, string>
   exercises: ExerciseOption[]; refs: Reference[]; refValues: ReferenceValue[]
   canEdit: boolean; view: View; onDelete: () => void
 }) {
@@ -186,8 +199,12 @@ function BlockSection({ b, letter, organizationId, names, exercises, refs, refVa
     disabled: !canEdit,
   })
   const style = { transform: CSS.Transform.toString(transform), transition }
+  const runningIds = new Set(exercises.filter((e) => e.movement_slug === 'running').map((e) => e.id))
   const lines = [...b.workout_exercises].sort((x, y) => x.position - y.position)
   const nextEx = lines.reduce((m, x) => Math.max(m, x.position), 0) + 1
+  const last = lines[lines.length - 1]
+  const lastType: LineType | null = last ? typeOf(last) : null
+  let prev: LineType | null = null
 
   return (
     <section
@@ -210,26 +227,34 @@ function BlockSection({ b, letter, organizationId, names, exercises, refs, refVa
           <button className="ml-auto text-sm text-red-600" onClick={onDelete}>Supprimer le bloc</button>
         )}
       </div>
-      {view === 'fields' && (lines.length > 0 || canEdit) && <FieldsHeader />}
       <ul>
-        {lines.map((x, j) =>
-          view === 'fields' ? (
-            <FieldsLine
-              key={`${x.id}:${JSON.stringify(x.prescription)}`} code={`${letter}${j + 1}`} ex={x}
-              name={names.get(x.exercise_id) ?? 'Exercice inconnu'} refs={refs} refValues={refValues} canEdit={canEdit}
-            />
-          ) : (
-            <Line
-              key={x.id} code={`${letter}${j + 1}`} ex={x} name={names.get(x.exercise_id) ?? 'Exercice inconnu'}
-              refs={refs} refValues={refValues} canEdit={canEdit}
-            />
-          ),
-        )}
+        {lines.map((x, j) => {
+          const type = typeOf(x)
+          const head = view === 'fields' && type !== prev
+          prev = type
+          const code = `${letter}${j + 1}`
+          const name = names.get(x.exercise_id) ?? 'Exercice inconnu'
+          return (
+            <Fragment key={view === 'fields' ? `${x.id}:${JSON.stringify(x.prescription)}` : x.id}>
+              {head && <li aria-hidden>{type === 'course' ? <CourseHeader /> : <FieldsHeader />}</li>}
+              {view === 'text' ? (
+                <Line code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
+              ) : type === 'course' ? (
+                <CourseLine
+                  code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit}
+                  allowPace={runningIds.has(x.exercise_id)}
+                />
+              ) : (
+                <FieldsLine code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
+              )}
+            </Fragment>
+          )
+        })}
       </ul>
       {canEdit && (view === 'fields' ? (
-        <FieldsAdd
-          blockId={b.id} organizationId={organizationId} nextPosition={nextEx}
-          exercises={exercises} refs={refs} refValues={refValues}
+        <LineAdd
+          blockId={b.id} blockKind={b.kind} organizationId={organizationId} quality={quality} nextPosition={nextEx}
+          exercises={exercises} refs={refs} refValues={refValues} lastType={lastType}
         />
       ) : (
         <AddLine blockId={b.id} organizationId={organizationId} nextPosition={nextEx} exercises={exercises} refs={refs} />
@@ -239,17 +264,21 @@ function BlockSection({ b, letter, organizationId, names, exercises, refs, refVa
 }
 
 function Builder({ athlete, w, refs, exercises, canEdit }: {
-  athlete: Athlete
-  w: NonNullable<ReturnType<typeof useWorkoutDetail>['data']>
-  refs: Reference[]; exercises: ExerciseOption[]; canEdit: boolean
+  athlete: Athlete; w: DetailData; refs: Reference[]; exercises: ExerciseOption[]; canEdit: boolean
 }) {
   const [secPerRep, setSecPerRep] = useState(3)
+  const [footing, setFooting] = useState('6:00')
   const [view, setView] = useState<View>(readView)
+  const [allKinds, setAllKinds] = useState(false)
   const addBlock = useAddBlock()
   const delBlock = useDeleteBlock()
   const reorder = useReorderBlocks()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const names = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
+  const runningIds = useMemo(
+    () => new Set(exercises.filter((e) => e.movement_slug === 'running').map((e) => e.id)),
+    [exercises],
+  )
   const refValues: ReferenceValue[] = useMemo(
     () => refs.map((r) => ({
       id: r.id, value: Number(r.value), unit: r.unit, measuredOn: r.measured_on, method: r.method,
@@ -258,6 +287,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
   )
   const blocks = [...w.workout_blocks].sort((a, b) => a.position - b.position)
   const nextBlock = blocks.reduce((m, b) => Math.max(m, b.position), 0) + 1
+  const footingSec = parseClock(footing) ?? 360
 
   const chooseView = (v: View) => {
     setView(v)
@@ -278,12 +308,27 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
 
   let seconds = 0
   let working = 0
+  let meters = 0
+  let distanceEstimated = false
+  let hasCourse = false
+  let incomplete = false
   for (const b of blocks) {
     for (const x of b.workout_exercises) {
       const p = forceOf(x)
-      if (!p) continue
-      seconds += estimatedSeconds(p, secPerRep)
-      if (b.kind !== 'warmup') working += p.sets
+      if (p) {
+        seconds += estimatedSeconds(p, secPerRep)
+        if (b.kind !== 'warmup') working += p.sets
+        continue
+      }
+      const c = courseOf(x.prescription)
+      if (c) {
+        hasCourse = true
+        const t = courseTotals(c, refValues, footingSec, runningIds.has(x.exercise_id))
+        seconds += t.seconds
+        meters += t.meters
+        if (t.distanceEstimated) distanceEstimated = true
+        if (t.incomplete) incomplete = true
+      }
     }
   }
   const back = `/athletes/${athlete.id}/semaine${w.scheduled_on ? `?s=${mondayOf(w.scheduled_on)}` : ''}`
@@ -307,13 +352,32 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
         </div>
       </div>
       <p className="text-sm text-slate-600">
-        Séries de travail : {working} (hors échauffement) · Durée : ≈ {Math.round(seconds / 60)} min (estimé, repos prescrits inclus, hypothèse{' '}
+        Séries de travail : {working} (hors échauffement) · Durée : ≈ {Math.round(seconds / 60)} min (estimé, repos et récupérations prescrits inclus, hypothèse{' '}
         <input
           type="number" min={1} max={10} value={secPerRep} aria-label="Secondes par répétition"
           onChange={(e) => setSecPerRep(Math.min(10, Math.max(1, Number(e.target.value) || 3)))}
           className="w-14 rounded border px-1"
-        />{' '}s par répétition)
+        />{' '}s par répétition
+        {hasCourse && (
+          <>
+            {' '}et allure de footing{' '}
+            <input
+              value={footing} aria-label="Allure de footing (min:sec par km)" onChange={(e) => setFooting(e.target.value)}
+              className="w-16 rounded border px-1"
+            />{' '}/km
+          </>
+        )})
       </p>
+      {meters > 0 && (
+        <p className="text-sm text-slate-600">
+          Distance de course : {(meters / 1000).toFixed(1).replace('.', ',')} km{distanceEstimated ? ' (estimé)' : ''}
+        </p>
+      )}
+      {incomplete && (
+        <p className="text-sm text-amber-700">
+          Durée incomplète : une ligne de vélo, rameur ou ski en distance, sans vitesse, n'est pas comptée.
+        </p>
+      )}
       {!canEdit && <p className="text-sm text-slate-500">Lecture seule.</p>}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
@@ -321,7 +385,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
             {blocks.map((b, i) => (
               <BlockSection
                 key={b.id} b={b} letter={String.fromCharCode(65 + i)} organizationId={w.organization_id}
-                names={names} exercises={exercises} refs={refs} refValues={refValues}
+                quality={w.quality} names={names} exercises={exercises} refs={refs} refValues={refValues}
                 canEdit={canEdit} view={view}
                 onDelete={() => { if (window.confirm('Supprimer ce bloc et ses exercices ?')) delBlock.mutate(b.id) }}
               />
@@ -331,7 +395,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
       </DndContext>
       {canEdit && (
         <div className="flex flex-wrap gap-2">
-          {BLOCK_KINDS.map((k) => (
+          {(allKinds ? BLOCK_KINDS : blockKindsFor(w.quality)).map((k) => (
             <button
               key={k} disabled={addBlock.isPending}
               className="rounded border bg-white px-2 py-1 text-xs disabled:opacity-50"
@@ -340,6 +404,12 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
               + {BLOCK_LABEL[k]}
             </button>
           ))}
+          <button
+            type="button" className="rounded border border-dashed px-2 py-1 text-xs text-slate-500"
+            onClick={() => setAllKinds((v) => !v)}
+          >
+            {allKinds ? 'Types de la qualité' : 'Tous les types de blocs'}
+          </button>
         </div>
       )}
       {(addBlock.isError || delBlock.isError || reorder.isError) && (

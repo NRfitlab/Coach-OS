@@ -7,8 +7,13 @@ import { ReferenceSchema, type Reference, type ReferenceInput } from '../domain/
 const COLUMNS =
   'id, athlete_id, organization_id, kind, exercise_id, value, unit, measured_on, method, estimation_formula, note, created_at'
 
-const ExerciseSchema = z.object({ id: z.string(), name: z.string() })
-export type ExerciseOption = z.infer<typeof ExerciseSchema>
+const MovementSchema = z.object({ slug: z.string() })
+const ExerciseRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  movements: z.union([MovementSchema, z.array(MovementSchema)]).nullable(),
+})
+export type ExerciseOption = { id: string; name: string; movement_slug: string | null }
 
 export function useExercises() {
   const userId = useAuth().session?.user.id
@@ -17,9 +22,12 @@ export function useExercises() {
     enabled: !!userId,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<ExerciseOption[]> => {
-      const { data, error } = await supabase.from('exercises').select('id, name').order('name')
+            const { data, error } = await supabase.from('exercises').select('id, name, movements(slug)').order('name')
       if (error) throw error
-      return z.array(ExerciseSchema).parse(data)
+      return z.array(ExerciseRowSchema).parse(data).map((r) => {
+        const m = Array.isArray(r.movements) ? r.movements[0] : r.movements
+        return { id: r.id, name: r.name, movement_slug: m?.slug ?? null }
+      })
     },
   })
 }
