@@ -77,3 +77,10 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Écran séance : jusqu'à 4 requêtes de données en parallèle à froid (séance avec blocs et exercices, athlète, références, exercices). Les exercices (5 min) et l'athlète sont en cache en usage normal. Le budget de 2 requêtes vise les écrans de liste.
 - Droits : blocs et lignes suivent `can_edit_workout` (créateur seul ; assistants et admin en lecture).
 - Prescription en mode force uniquement. Une charge en % référence un 1RM daté de l'athlète pour l'exercice et n'est jamais stockée en kg.
+
+## Builder : blocs et lignes par qualité (4c)
+- Chaque ligne porte un mode (champ `mode` de la prescription). La qualité de la séance choisit le mode proposé par défaut. Modes prévus : force, puissance, course, conditioning, mobilite, recuperation, libre. Livrés : force et course.
+- Blocs proposés par qualité : course = échauffement, éducatifs, footing continu, intervalles, retour au calme ; autres qualités = types de force. Le bouton « Tous les types de blocs » déplie la liste complète.
+- Séance de qualité course : formulaire course d'emblée, exercices limités aux mouvements `running` et `machine_cardio`, exercice suggéré par bloc. « Tous les exercices » rouvre la recherche complète. Vélo, rameur et ski n'ont ni allure ni % VMA.
+- Course : hypothèse d'allure de footing (6:00/km, modifiable) pour les lignes de course à pied sans vitesse prescrite. Récupérations comptées entre les répétitions (répétitions − 1). Valeurs sur hypothèse ou sur VMA estimée étiquetées « estimé ». Hors course à pied, aucune hypothèse : la durée incomplète est signalée.
+- Ordre des blocs modifiable par glisser-déposer sur la poignée, positions enregistrées en une requête.

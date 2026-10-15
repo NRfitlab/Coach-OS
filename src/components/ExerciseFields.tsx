@@ -8,11 +8,11 @@ import {
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 
-const GRID = 'grid grid-cols-[2rem_minmax(9rem,1fr)_4rem_5rem_16rem_4rem_5rem_6rem] items-start gap-2'
-const CELL = 'w-full rounded border px-2 py-1 text-sm'
+export const GRID = 'grid grid-cols-[2rem_minmax(9rem,1fr)_4rem_5rem_16rem_4rem_5rem_6rem] items-start gap-2'
+export const CELL = 'w-full rounded border px-2 py-1 text-sm'
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
-function absText(f: ForceFields, refId: string | null, refs: ReferenceValue[]): string {
+export function absText(f: ForceFields, refId: string | null, refs: ReferenceValue[]): string {
   if (f.loadMode !== 'percent' || !refId) return ''
   const v = Number(f.loadValue.replace(',', '.'))
   if (!Number.isFinite(v) || v <= 0) return ''
@@ -23,13 +23,13 @@ function absText(f: ForceFields, refId: string | null, refs: ReferenceValue[]): 
 
 export function FieldsHeader() {
   return (
-    <div className={`${GRID} border-b pb-1 text-xs text-slate-500`}>
+    <div className={`${GRID} pb-1 text-xs text-slate-500`}>
       <span /><span>Exercice</span><span>Séries</span><span>Reps</span><span>Charge</span><span>RPE</span><span>Récup (s)</span><span />
     </div>
   )
 }
 
-function FieldCells({ f, set, percentAvailable, abs, disabled, blurOnEnter }: {
+export function FieldCells({ f, set, percentAvailable, abs, disabled, blurOnEnter }: {
   f: ForceFields
   set: (patch: Partial<ForceFields>) => void
   percentAvailable: boolean
@@ -104,7 +104,7 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
   if (!p || !f) {
     const mode = String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')
     return (
-      <li className="flex gap-3 border-b py-1 text-sm">
+      <li className="flex gap-3 border-t py-1 text-sm">
         <span className="w-8 font-mono text-slate-500">{code}</span>
         <span className="font-medium">{name}</span>
         <span className="text-slate-500">Mode « {mode} » (non modifiable ici)</span>
@@ -114,7 +114,7 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
   }
 
   return (
-    <li className="border-b py-1 text-sm" onBlur={onBlur}>
+    <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={GRID}>
         <span className="pt-1 font-mono text-slate-500">{code}</span>
         <span className="pt-1 font-medium">{name}</span>
