@@ -3,16 +3,24 @@ import { useAddExercise } from '../athletes/builder'
 import type { ExerciseOption } from '../athletes/references'
 import type { BlockKind } from '../domain/block'
 import { courseFromFields, defaultCourseFields, latestMas, type CourseFields } from '../domain/course'
-import { lineProfile, type LineMode } from '../domain/lineProfile'
+import { lineProfile } from '../domain/lineProfile'
+import { defaultMobilityFields, mobilityFromFields, type MobilityFields } from '../domain/mobility'
+import { MODE_LABEL, POOLS, modeForMovement, type LineMode } from '../domain/modes'
 import type { ReferenceValue } from '../domain/prescription'
 import { defaultFields, fromFields, latestOneRm, type ForceFields } from '../domain/prescriptionFields'
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 import { COURSE_GRID, CourseCells, CourseHeader, courseAbs } from './CourseFields'
 import { absText, CELL, FieldCells, FieldsHeader, GRID } from './ExerciseFields'
+import { MOB_GRID, MobilityCells, MobilityHeader } from './MobilityFields'
 
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-const REPS_COURSE = 'input[aria-label="Nombre de répétitions"]'
+const FIRST: Record<LineMode, string> = {
+  force: 'input[aria-label="Séries"]',
+  course: 'input[aria-label="Nombre de répétitions"]',
+  mobilite: 'input[aria-label="Durée"]',
+}
+const SEARCH = 'input[aria-label="Exercice"]'
 
 export function LineAdd({
   blockId, blockKind, organizationId, quality, nextPosition, exercises, refs, refValues, lastType,
@@ -23,51 +31,63 @@ export function LineAdd({
 }) {
   const add = useAddExercise()
   const profile = lineProfile(quality)
+  const sessionMode: LineMode = profile?.mode ?? 'force'
+  const [override, setOverride] = useState<LineMode | null>(null)
   const [allExercises, setAllExercises] = useState(false)
-  const restricted = !!profile && !allExercises
-  const pool = useMemo(() => {
-    const p = lineProfile(quality)
-    return p && !allExercises ? exercises.filter((e) => p.movements.includes(e.movement_slug ?? '')) : exercises
-  }, [quality, allExercises, exercises])
+  const selected: LineMode = override ?? sessionMode
+  const movements = POOLS[selected]
+  const pool = useMemo(
+    () => (movements ? exercises.filter((e) => movements.includes(e.movement_slug ?? '')) : exercises),
+    [movements, exercises],
+  )
+  const dropdown = !!movements && !allExercises && pool.length > 0
   const suggestion = (): ExerciseOption | null => {
-    const name = profile?.suggestion[blockKind]
-    return (restricted && name ? pool.find((e) => e.name === name) : undefined) ?? null
+    const name = override === null ? profile?.suggestion[blockKind] : undefined
+    return (dropdown && name ? pool.find((e) => e.name === name) : undefined) ?? null
   }
 
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<ExerciseOption | null>(suggestion)
   const [ff, setFf] = useState<ForceFields>(defaultFields(false))
   const [cf, setCf] = useState<CourseFields>(defaultCourseFields())
+  const [mf, setMf] = useState<MobilityFields>(defaultMobilityFields())
   const [err, setErr] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const focus = (selector: string) => formRef.current?.querySelector<HTMLElement>(selector)?.focus()
 
-  const mode: LineMode = restricted && profile ? profile.mode : picked?.movement_slug === 'running' ? 'course' : 'force'
+  const mode: LineMode = dropdown ? selected : picked ? modeForMovement(picked.movement_slug) : 'force'
   const allowPace = picked ? picked.movement_slug === 'running' : true
   const oneRm = picked && mode === 'force' ? latestOneRm(refs, picked.id) : undefined
   const mas = latestMas(refs)
 
   const matches = useMemo(() => {
     const n = normalize(q.trim())
-    if (restricted || !n || picked) return []
-    return pool.filter((e) => normalize(e.name).includes(n)).slice(0, 6)
-  }, [q, picked, pool, restricted])
+    if (dropdown || !n || picked) return []
+    return exercises.filter((e) => normalize(e.name).includes(n)).slice(0, 6)
+  }, [q, picked, exercises, dropdown])
 
   const pick = (e: ExerciseOption) => {
     setPicked(e)
     setQ(e.name)
-    const running = e.movement_slug === 'running'
-    if (restricted || running) {
+    const m: LineMode = dropdown ? selected : modeForMovement(e.movement_slug)
+    if (m === 'course') {
+      const running = e.movement_slug === 'running'
       setCf((s) =>
         !running && (s.intensityKind === 'pace' || s.intensityKind === 'percent_mas')
           ? { ...s, intensityKind: 'none', intensityValue: '' }
           : s,
       )
-      setTimeout(() => focus(REPS_COURSE), 0)
-    } else {
+    } else if (m === 'force') {
       setFf((s) => ({ ...s, loadMode: latestOneRm(refs, e.id) ? 'percent' : 'kg', loadValue: '' }))
-      setTimeout(() => focus('input[aria-label="Séries"]'), 0)
     }
+    setTimeout(() => focus(FIRST[m]), 0)
+  }
+  const changeType = (m: LineMode) => {
+    setOverride(m === sessionMode ? null : m)
+    setAllExercises(false)
+    setPicked(null)
+    setQ('')
+    setErr(null)
   }
   const toggleAll = () => {
     setAllExercises((v) => !v)
@@ -79,28 +99,50 @@ export function LineAdd({
     e.preventDefault()
     setErr(null)
     if (!picked) return setErr('Choisissez un exercice.')
-    const res = mode === 'course' ? courseFromFields(cf, mas?.id ?? null) : fromFields(ff, oneRm?.id ?? null)
+    const res =
+      mode === 'course'
+        ? courseFromFields(cf, mas?.id ?? null)
+        : mode === 'mobilite'
+          ? mobilityFromFields(mf)
+          : fromFields(ff, oneRm?.id ?? null)
     if (!res.ok) return setErr(res.error)
     try {
       await add.mutateAsync({
         blockId, organizationId, exerciseId: picked.id, position: nextPosition, prescription: res.value,
       })
-      setQ(''); setFf(defaultFields(false)); setCf(defaultCourseFields())
+      setQ(''); setFf(defaultFields(false)); setCf(defaultCourseFields()); setMf(defaultMobilityFields())
       setPicked(suggestion())
-      setTimeout(() => focus(restricted ? REPS_COURSE : 'input[aria-label="Exercice"]'), 0)
+      setTimeout(() => focus(dropdown ? FIRST[mode] : SEARCH), 0)
     } catch (x) {
       setErr(errMsg(x))
     }
   }
 
   const showHeader = lastType !== mode
+  const grid = mode === 'course' ? COURSE_GRID : mode === 'mobilite' ? MOB_GRID : GRID
 
   return (
     <div className="mt-2">
-      {showHeader && (mode === 'course' ? <CourseHeader /> : <FieldsHeader />)}
-      <form ref={formRef} onSubmit={submit} className={mode === 'course' ? COURSE_GRID : GRID}>
+      <div className="mb-1 flex items-center gap-3 text-xs text-slate-500">
+        <label className="flex items-center gap-1">
+          Type de ligne
+          <select
+            aria-label="Type de ligne" className="rounded border px-1 py-0.5 text-xs" value={selected}
+            onChange={(e) => changeType(e.target.value as LineMode)}
+          >
+            {(Object.keys(MODE_LABEL) as LineMode[]).map((m) => <option key={m} value={m}>{MODE_LABEL[m]}</option>)}
+          </select>
+        </label>
+        {movements && (
+          <button type="button" className="underline" onClick={toggleAll}>
+            {allExercises ? 'Exercices du type' : 'Tous les exercices'}
+          </button>
+        )}
+      </div>
+      {showHeader && (mode === 'course' ? <CourseHeader /> : mode === 'mobilite' ? <MobilityHeader /> : <FieldsHeader />)}
+      <form ref={formRef} onSubmit={submit} className={grid}>
         <span />
-        {restricted ? (
+        {dropdown ? (
           <select
             aria-label="Exercice" className={CELL} value={picked?.id ?? ''}
             onChange={(e) => {
@@ -126,6 +168,8 @@ export function LineAdd({
             f={cf} set={(patch) => setCf({ ...cf, ...patch })} masAvailable={!!mas} allowPace={allowPace}
             abs={courseAbs(cf, mas?.id ?? null, refValues)} disabled={false} blurOnEnter={false}
           />
+        ) : mode === 'mobilite' ? (
+          <MobilityCells f={mf} set={(patch) => setMf({ ...mf, ...patch })} disabled={false} blurOnEnter={false} />
         ) : (
           <FieldCells
             f={ff} set={(patch) => setFf({ ...ff, ...patch })} percentAvailable={!!oneRm}
@@ -146,11 +190,6 @@ export function LineAdd({
             </li>
           ))}
         </ul>
-      )}
-      {profile && (
-        <button type="button" className="mt-1 text-xs text-slate-500 underline" onClick={toggleAll}>
-          {allExercises ? 'Exercices de la qualité' : 'Tous les exercices'}
-        </button>
       )}
       {err && <p role="alert" className="mt-1 text-sm text-red-600">{err}</p>}
     </div>

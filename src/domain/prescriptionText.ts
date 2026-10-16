@@ -7,13 +7,22 @@ const fail = (error: string): ParseResult => ({ ok: false, error })
 
 export const FORCE_SYNTAX = '4x5 @80% rpe8 r180'
 
-export function parseForce(text: string, referenceId: string | null): ParseResult {
+const INTENTION_TOKEN = {
+  max: 'max_strength', force: 'strength', hyper: 'hypertrophy', puiss: 'power', tech: 'technique',
+} as const
+type Token = keyof typeof INTENTION_TOKEN
+const tokenOf = (intention: string | undefined): Token | undefined =>
+  (Object.keys(INTENTION_TOKEN) as Token[]).find((k) => INTENTION_TOKEN[k] === intention)
+
+/** `base` conserve la note, et l'intention quand le texte ne peut pas la représenter. */
+export function parseForce(text: string, referenceId: string | null, base?: ForcePrescription): ParseResult {
   let sets: number | undefined
   let reps: ForcePrescription['reps'] | undefined
   let load: ForcePrescription['load'] | undefined
   let rpe: number | undefined
   let rest: number | undefined
   let tempo: string | undefined
+  let intention: ForcePrescription['intention'] = undefined
 
   for (const t of text.trim().replace(/,/g, '.').split(/\s+/).filter(Boolean)) {
     const sr = t.match(/^(\d+)[x×](\d+)(?:-(\d+))?$/i)
@@ -38,7 +47,9 @@ export function parseForce(text: string, referenceId: string | null): ParseResul
     const rs = t.match(/^r(\d+)(m|min|')?$/i)
     if (rs) { rest = rs[2] ? Number(rs[1]) * 60 : Number(rs[1]); continue }
     if (/^[0-9X]-[0-9X]-[0-9X]-[0-9X]$/i.test(t)) { tempo = t.toUpperCase(); continue }
-    return fail(`Élément non reconnu : « ${t} ». Format : ${FORCE_SYNTAX}`)
+    const it = t.match(/^#(max|force|hyper|puiss|tech)$/i)
+    if (it) { intention = INTENTION_TOKEN[it[1].toLowerCase() as Token]; continue }
+    return fail(`Élément non reconnu : « ${t} ». Format : ${FORCE_SYNTAX}, intentions : #max #force #hyper #puiss #tech`)
   }
 
   if (sets === undefined || reps === undefined) return fail('Séries × répétitions requis, exemple : 4x5')
@@ -46,7 +57,13 @@ export function parseForce(text: string, referenceId: string | null): ParseResul
     if (rpe === undefined) return fail('Charge requise : @80%, @80kg, @pc ou RPE')
     load = { type: 'rpe_only' }
   }
-  const res = forcePrescription.safeParse({ mode: 'force', sets, reps, load, rpe, tempo, restSeconds: rest })
+  if (!intention && base?.intention && !tokenOf(base.intention)) intention = base.intention
+
+  const res = forcePrescription.safeParse({
+    mode: 'force', sets, reps, load, rpe, tempo, restSeconds: rest,
+    ...(intention ? { intention } : {}),
+    ...(base?.note ? { note: base.note } : {}),
+  })
   return res.success ? { ok: true, value: res.data } : fail(res.error.issues[0]?.message ?? 'Prescription invalide')
 }
 
@@ -60,6 +77,8 @@ export function prescriptionToText(p: ForcePrescription): string {
   if (p.rpe !== undefined) parts.push(`rpe${p.rpe}`)
   if (p.tempo) parts.push(p.tempo)
   if (p.restSeconds !== undefined) parts.push(`r${p.restSeconds}`)
+  const token = tokenOf(p.intention)
+  if (token) parts.push(`#${token}`)
   return parts.join(' ')
 }
 

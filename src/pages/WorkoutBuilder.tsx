@@ -13,12 +13,17 @@ import {
 import { useExercises, useReferences, type ExerciseOption } from '../athletes/references'
 import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
+import { BlockContext } from '../components/BlockContext'
 import { CourseHeader, CourseLine } from '../components/CourseFields'
 import { FieldsHeader, FieldsLine } from '../components/ExerciseFields'
 import { LineAdd } from '../components/LineAdd'
+import { MobilityHeader, MobilityLine } from '../components/MobilityFields'
 import type { Athlete } from '../domain/athlete'
 import { BLOCK_KINDS, BLOCK_LABEL, blockKindsFor } from '../domain/block'
+import { contextOf } from '../domain/blockContext'
 import { courseOf, courseTotals, describeCourse, parseClock } from '../domain/course'
+import { describeMobility, mobilityOf, mobilitySeconds } from '../domain/mobility'
+import { modeForMovement, modeOf, type LineMode } from '../domain/modes'
 import type { ReferenceValue } from '../domain/prescription'
 import { forceOfPrescription, latestOneRm } from '../domain/prescriptionFields'
 import {
@@ -30,12 +35,11 @@ import { formatDate } from '../lib/utils'
 import { mondayOf } from '../lib/week'
 
 type View = 'fields' | 'text'
-type LineType = 'force' | 'course'
 const VIEW_KEY = 'coachos.builderView'
 const INPUT = 'rounded border px-2 py-1 text-sm'
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const forceOf = (x: ExerciseData) => forceOfPrescription(x.prescription)
-const typeOf = (x: ExerciseData): LineType => (courseOf(x.prescription) ? 'course' : 'force')
+const typeOf = (x: ExerciseData): LineMode => modeOf(x.prescription)
 
 function readView(): View {
   try {
@@ -55,6 +59,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
   const [err, setErr] = useState<string | null>(null)
   const p = forceOf(ex)
   const c = courseOf(ex.prescription)
+  const m = mobilityOf(ex.prescription)
 
   const startEdit = () => {
     if (!p) return
@@ -65,7 +70,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
   const save = async (e: FormEvent) => {
     e.preventDefault()
     const stored = p?.load.type === 'percent_reference' ? p.load.referenceId : null
-    const res = parseForce(text, stored ?? latestOneRm(refs, ex.exercise_id)?.id ?? null)
+    const res = parseForce(text, stored ?? latestOneRm(refs, ex.exercise_id)?.id ?? null, p ?? undefined)
     if (!res.ok) return setErr(res.error)
     try {
       await upd.mutateAsync({ id: ex.id, prescription: res.value })
@@ -91,7 +96,9 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
             ? describeForce(p, refValues)
             : c
               ? `${describeCourse(c, refValues)} (modifiable en vue Champs)`
-              : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
+              : m
+                ? `${describeMobility(m)} (modifiable en vue Champs)`
+                : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
         </button>
       )}
       {canEdit && !editing && (
@@ -130,7 +137,9 @@ function AddLine({ blockId, organizationId, nextPosition, exercises, refs }: {
     e.preventDefault()
     setErr(null)
     if (!picked) return setErr('Choisissez un exercice dans la liste.')
-    if (picked.movement_slug === 'running') return setErr('Les lignes de course se saisissent en vue Champs.')
+    if (modeForMovement(picked.movement_slug) !== 'force') {
+      return setErr('Les lignes de course et de mobilité se saisissent en vue Champs.')
+    }
     const res = parseForce(text, latestOneRm(refs, picked.id)?.id ?? null)
     if (!res.ok) return setErr(res.error)
     try {
@@ -203,14 +212,15 @@ function BlockSection({
   const lines = [...b.workout_exercises].sort((x, y) => x.position - y.position)
   const nextEx = lines.reduce((m, x) => Math.max(m, x.position), 0) + 1
   const last = lines[lines.length - 1]
-  const lastType: LineType | null = last ? typeOf(last) : null
-  let prev: LineType | null = null
+  const lastType: LineMode | null = last ? typeOf(last) : null
+  const showContext = quality === 'mobility' || lines.some((x) => typeOf(x) === 'mobilite')
+  let prev: LineMode | null = null
 
   return (
     <section
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border bg-white p-3 ${isDragging ? 'relative z-20 opacity-80 shadow-lg' : ''}`}
+      className={`overflow-x-auto rounded-lg border bg-white p-3 ${isDragging ? 'relative z-20 opacity-80 shadow-lg' : ''}`}
     >
       <div className="mb-1 flex items-center gap-2">
         {canEdit && (
@@ -223,6 +233,9 @@ function BlockSection({
         )}
         <h2 className="font-semibold">{letter} · {BLOCK_LABEL[b.kind]}</h2>
         {b.kind === 'warmup' && <span className="text-xs text-slate-500">hors séries de travail</span>}
+        {showContext && (canEdit || contextOf(b.params)) && (
+          <BlockContext blockId={b.id} params={b.params} canEdit={canEdit} />
+        )}
         {canEdit && (
           <button className="ml-auto text-sm text-red-600" onClick={onDelete}>Supprimer le bloc</button>
         )}
@@ -236,7 +249,11 @@ function BlockSection({
           const name = names.get(x.exercise_id) ?? 'Exercice inconnu'
           return (
             <Fragment key={view === 'fields' ? `${x.id}:${JSON.stringify(x.prescription)}` : x.id}>
-              {head && <li aria-hidden>{type === 'course' ? <CourseHeader /> : <FieldsHeader />}</li>}
+              {head && (
+                <li aria-hidden>
+                  {type === 'course' ? <CourseHeader /> : type === 'mobilite' ? <MobilityHeader /> : <FieldsHeader />}
+                </li>
+              )}
               {view === 'text' ? (
                 <Line code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
               ) : type === 'course' ? (
@@ -244,6 +261,8 @@ function BlockSection({
                   code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit}
                   allowPace={runningIds.has(x.exercise_id)}
                 />
+              ) : type === 'mobilite' ? (
+                <MobilityLine code={code} ex={x} name={name} canEdit={canEdit} />
               ) : (
                 <FieldsLine code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
               )}
@@ -311,6 +330,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
   let meters = 0
   let distanceEstimated = false
   let hasCourse = false
+  let hasMobility = false
   let incomplete = false
   for (const b of blocks) {
     for (const x of b.workout_exercises) {
@@ -328,6 +348,12 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
         meters += t.meters
         if (t.distanceEstimated) distanceEstimated = true
         if (t.incomplete) incomplete = true
+        continue
+      }
+      const m = mobilityOf(x.prescription)
+      if (m) {
+        hasMobility = true
+        seconds += mobilitySeconds(m, secPerRep)
       }
     }
   }
@@ -358,6 +384,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
           onChange={(e) => setSecPerRep(Math.min(10, Math.max(1, Number(e.target.value) || 3)))}
           className="w-14 rounded border px-1"
         />{' '}s par répétition
+        {hasMobility && ', 5 s par respiration'}
         {hasCourse && (
           <>
             {' '}et allure de footing{' '}

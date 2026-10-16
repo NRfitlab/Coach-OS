@@ -84,3 +84,9 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Séance de qualité course : formulaire course d'emblée, exercices limités aux mouvements `running` et `machine_cardio`, exercice suggéré par bloc. « Tous les exercices » rouvre la recherche complète. Vélo, rameur et ski n'ont ni allure ni % VMA.
 - Course : hypothèse d'allure de footing (6:00/km, modifiable) pour les lignes de course à pied sans vitesse prescrite. Récupérations comptées entre les répétitions (répétitions − 1). Valeurs sur hypothèse ou sur VMA estimée étiquetées « estimé ». Hors course à pied, aucune hypothèse : la durée incomplète est signalée.
 - Ordre des blocs modifiable par glisser-déposer sur la poignée, positions enregistrées en une requête.
+
+## Builder : types de ligne (4d)
+- Les lignes de force exposent aussi le tempo (format 3-1-X-1) et l'intention (force max, force, hypertrophie, puissance, technique). La syntaxe texte porte l'intention par les jetons #max #force #hyper #puiss #tech.
+- Sélecteur « Type de ligne » à l'ajout : force, course, mobilité. La qualité de la séance donne le type par défaut ; un exercice choisi par recherche impose le mode de son mouvement (running : course, mobility : mobilité, autres : force).
+- Mobilité : durée (s), répétitions, respirations, côté ; au moins un des trois premiers. Durée estimée : durée prescrite, sinon répétitions × secondes par répétition, sinon respirations × 5 s (hypothèse affichée) ; multipliée par 2 pour « les deux côtés » (enchaînés).
+- Le contexte d'un bloc de mobilité (avant, après, récupération, amplitude, technique) est stocké dans `workout_blocks.params`.
