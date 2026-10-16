@@ -1,4 +1,4 @@
-import { forcePrescription, prescriptionSchema, type ForcePrescription } from './prescription'
+import { forcePrescription, intentionSchema, prescriptionSchema, type ForcePrescription } from './prescription'
 import type { ParseResult } from './prescriptionText'
 import type { Reference } from './reference'
 
@@ -10,11 +10,16 @@ export type ForceFields = {
   loadMode: LoadMode
   loadValue: string
   rpe: string
+  tempo: string
   rest: string
+  intention: string
 }
 
 export function defaultFields(hasOneRm: boolean): ForceFields {
-  return { sets: '', reps: '', loadMode: hasOneRm ? 'percent' : 'kg', loadValue: '', rpe: '', rest: '' }
+  return {
+    sets: '', reps: '', loadMode: hasOneRm ? 'percent' : 'kg', loadValue: '',
+    rpe: '', tempo: '', rest: '', intention: '',
+  }
 }
 
 export function forceOfPrescription(raw: unknown): ForcePrescription | null {
@@ -34,7 +39,9 @@ export function toFields(p: ForcePrescription): ForceFields {
       l.type === 'percent_reference' ? 'percent' : l.type === 'kg' ? 'kg' : l.type === 'bodyweight' ? 'bodyweight' : 'rpe_only',
     loadValue: l.type === 'percent_reference' || l.type === 'kg' ? String(l.value) : '',
     rpe: p.rpe === undefined ? '' : String(p.rpe),
+    tempo: p.tempo ?? '',
     rest: p.restSeconds === undefined ? '' : String(p.restSeconds),
+    intention: p.intention ?? '',
   }
 }
 
@@ -54,7 +61,7 @@ function parseRest(raw: string): number | undefined | 'invalid' {
   return 'invalid'
 }
 
-/** `base` conserve tempo, intention et note d'une prescription existante. */
+/** `base` conserve la note d'une prescription existante. */
 export function fromFields(f: ForceFields, referenceId: string | null, base?: ForcePrescription): ParseResult {
   const fail = (error: string): ParseResult => ({ ok: false, error })
 
@@ -87,8 +94,14 @@ export function fromFields(f: ForceFields, referenceId: string | null, base?: Fo
   }
   if (load.type === 'rpe_only' && rpe === undefined) return fail('RPE requis quand la charge est « RPE seul »')
 
+  const tempo = f.tempo.trim().toUpperCase()
+  if (tempo && !/^[0-9X]-[0-9X]-[0-9X]-[0-9X]$/.test(tempo)) return fail('Tempo : format 3-1-X-1')
+
   const rest = parseRest(f.rest)
   if (rest === 'invalid') return fail('Récup : secondes (120) ou min:sec (2:00)')
+
+  const intentionParsed = f.intention ? intentionSchema.safeParse(f.intention) : null
+  if (intentionParsed && !intentionParsed.success) return fail('Intention inconnue')
 
   const res = forcePrescription.safeParse({
     mode: 'force',
@@ -96,9 +109,9 @@ export function fromFields(f: ForceFields, referenceId: string | null, base?: Fo
     reps,
     load,
     ...(rpe !== undefined ? { rpe } : {}),
+    ...(tempo ? { tempo } : {}),
     ...(rest !== undefined ? { restSeconds: rest } : {}),
-    ...(base?.tempo ? { tempo: base.tempo } : {}),
-    ...(base?.intention ? { intention: base.intention } : {}),
+    ...(intentionParsed?.success ? { intention: intentionParsed.data } : {}),
     ...(base?.note ? { note: base.note } : {}),
   })
   return res.success ? { ok: true, value: res.data } : fail(res.error.issues[0]?.message ?? 'Prescription invalide')

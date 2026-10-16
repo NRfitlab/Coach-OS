@@ -8,7 +8,7 @@ import { WorkoutSchema } from '../domain/workout'
 
 const SELECT =
   'id, athlete_id, organization_id, title, scheduled_on, quality, planned_minutes, notes, context, created_at, created_by, ' +
-  'workout_blocks(id, kind, label, notes, position, workout_exercises(id, exercise_id, position, notes, prescription))'
+  'workout_blocks(id, kind, label, notes, params, position, workout_exercises(id, exercise_id, position, notes, prescription))'
 
 const ExerciseRow = z.object({
   id: z.string(),
@@ -22,6 +22,7 @@ const BlockRow = z.object({
   kind: z.enum(BLOCK_KINDS),
   label: z.string().nullable(),
   notes: z.string().nullable(),
+  params: z.unknown(),
   position: z.number(),
   workout_exercises: z.array(ExerciseRow),
 })
@@ -67,6 +68,14 @@ export const useDeleteBlock = () =>
     if (error) throw error
   })
 
+export const useUpdateBlockParams = () =>
+  useBuilderMutation(async (v: { id: string; params: Record<string, unknown> }) => {
+    const { error } = await supabase
+      .from('workout_blocks').update({ params: v.params }).eq('id', v.id)
+      .select('id').single()
+    if (error) throw error
+  })
+
 export const useAddExercise = () =>
   useBuilderMutation(async (v: {
     blockId: string; organizationId: string; exerciseId: string; position: number; prescription: Prescription
@@ -94,7 +103,8 @@ export const useDeleteExercise = () =>
     const { error } = await supabase.from('workout_exercises').delete().eq('id', id)
     if (error) throw error
   })
-  export function useReorderBlocks() {
+
+export function useReorderBlocks() {
   const queryClient = useQueryClient()
   const userId = useAuth().session?.user.id
   return useMutation({

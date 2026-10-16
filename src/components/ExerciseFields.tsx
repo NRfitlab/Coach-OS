@@ -1,16 +1,29 @@
-import { useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { useAddExercise, useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
-import type { ExerciseOption } from '../athletes/references'
+import { useState, type FocusEvent, type KeyboardEvent } from 'react'
+import { useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
 import { absoluteLoadKg, type ReferenceValue } from '../domain/prescription'
 import {
-  defaultFields, forceOfPrescription, fromFields, latestOneRm, toFields, type ForceFields, type LoadMode,
+  forceOfPrescription, fromFields, latestOneRm, toFields, type ForceFields, type LoadMode,
 } from '../domain/prescriptionFields'
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 
-export const GRID = 'grid grid-cols-[2rem_minmax(9rem,1fr)_4rem_5rem_16rem_4rem_5rem_6rem] items-start gap-2'
+export const GRID =
+  'grid grid-cols-[2rem_minmax(9rem,1fr)_4rem_5rem_14rem_4rem_5rem_5rem_8rem_6rem] items-start gap-2'
 export const CELL = 'w-full rounded border px-2 py-1 text-sm'
-const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+const INTENTION_LABEL: Record<string, string> = {
+  max_strength: 'Force max',
+  strength: 'Force',
+  hypertrophy: 'Hypertrophie',
+  power: 'Puissance',
+  speed: 'Vitesse',
+  aerobic: 'Aérobie',
+  anaerobic: 'Anaérobie',
+  technique: 'Technique',
+  mobility: 'Mobilité',
+  recovery: 'Récupération',
+}
+const FORCE_INTENTIONS = ['max_strength', 'strength', 'hypertrophy', 'power', 'technique']
 
 export function absText(f: ForceFields, refId: string | null, refs: ReferenceValue[]): string {
   if (f.loadMode !== 'percent' || !refId) return ''
@@ -24,7 +37,8 @@ export function absText(f: ForceFields, refId: string | null, refs: ReferenceVal
 export function FieldsHeader() {
   return (
     <div className={`${GRID} pb-1 text-xs text-slate-500`}>
-      <span /><span>Exercice</span><span>Séries</span><span>Reps</span><span>Charge</span><span>RPE</span><span>Récup (s)</span><span />
+      <span /><span>Exercice</span><span>Séries</span><span>Reps</span><span>Charge</span><span>RPE</span>
+      <span>Tempo</span><span>Récup (s)</span><span>Intention</span><span />
     </div>
   )
 }
@@ -41,6 +55,7 @@ export function FieldCells({ f, set, percentAvailable, abs, disabled, blurOnEnte
     if (blurOnEnter && e.key === 'Enter') e.currentTarget.blur()
   }
   const showValue = f.loadMode === 'percent' || f.loadMode === 'kg'
+  const extraIntention = f.intention && !FORCE_INTENTIONS.includes(f.intention) ? f.intention : null
   return (
     <>
       <input aria-label="Séries" inputMode="numeric" className={CELL} disabled={disabled}
@@ -65,8 +80,16 @@ export function FieldCells({ f, set, percentAvailable, abs, disabled, blurOnEnte
       </div>
       <input aria-label="RPE" inputMode="decimal" className={CELL} disabled={disabled}
         value={f.rpe} onChange={(e) => set({ rpe: e.target.value })} onKeyDown={enter} />
+      <input aria-label="Tempo" placeholder="3-1-X-1" className={CELL} disabled={disabled}
+        value={f.tempo} onChange={(e) => set({ tempo: e.target.value })} onKeyDown={enter} />
       <input aria-label="Récupération" className={CELL} disabled={disabled}
         value={f.rest} onChange={(e) => set({ rest: e.target.value })} onKeyDown={enter} />
+      <select aria-label="Intention" className={CELL} disabled={disabled}
+        value={f.intention} onChange={(e) => set({ intention: e.target.value })}>
+        <option value="">—</option>
+        {FORCE_INTENTIONS.map((k) => <option key={k} value={k}>{INTENTION_LABEL[k]}</option>)}
+        {extraIntention && <option value={extraIntention}>{INTENTION_LABEL[extraIntention] ?? extraIntention}</option>}
+      </select>
     </>
   )
 }
@@ -129,83 +152,5 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
       {(err || del.isError) && <p role="alert" className="mt-1 text-red-600">{err ?? errMsg(del.error)}</p>}
       {dirty && !err && <p className="mt-1 text-xs text-slate-400">Modifié : enregistré en quittant la ligne.</p>}
     </li>
-  )
-}
-
-export function FieldsAdd({ blockId, organizationId, nextPosition, exercises, refs, refValues }: {
-  blockId: string; organizationId: string; nextPosition: number
-  exercises: ExerciseOption[]; refs: Reference[]; refValues: ReferenceValue[]
-}) {
-  const add = useAddExercise()
-  const [q, setQ] = useState('')
-  const [picked, setPicked] = useState<ExerciseOption | null>(null)
-  const [f, setF] = useState<ForceFields>(defaultFields(false))
-  const [err, setErr] = useState<string | null>(null)
-  const formRef = useRef<HTMLFormElement>(null)
-  const oneRm = picked ? latestOneRm(refs, picked.id) : undefined
-  const focus = (label: string) =>
-    formRef.current?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)?.focus()
-
-  const matches = useMemo(() => {
-    const n = normalize(q.trim())
-    if (!n || picked) return []
-    return exercises.filter((e) => normalize(e.name).includes(n)).slice(0, 6)
-  }, [q, picked, exercises])
-
-  const pick = (e: ExerciseOption) => {
-    setPicked(e)
-    setQ(e.name)
-    setF((s) => ({ ...s, loadMode: latestOneRm(refs, e.id) ? 'percent' : 'kg', loadValue: '' }))
-    focus('Séries')
-  }
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    setErr(null)
-    if (!picked) return setErr('Choisissez un exercice dans la liste.')
-    const res = fromFields(f, oneRm?.id ?? null)
-    if (!res.ok) return setErr(res.error)
-    try {
-      await add.mutateAsync({
-        blockId, organizationId, exerciseId: picked.id, position: nextPosition, prescription: res.value,
-      })
-      setQ(''); setPicked(null); setF(defaultFields(false))
-      focus('Exercice')
-    } catch (x) {
-      setErr(errMsg(x))
-    }
-  }
-
-  return (
-    <div className="mt-2">
-      <form ref={formRef} onSubmit={submit} className={GRID}>
-        <span />
-        <input
-          aria-label="Exercice" placeholder="Exercice (recherche)" className={CELL} value={q}
-          onChange={(e) => { setQ(e.target.value); setPicked(null) }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !picked && matches[0]) { e.preventDefault(); pick(matches[0]) }
-          }}
-        />
-        <FieldCells
-          f={f} set={(patch) => setF({ ...f, ...patch })} percentAvailable={!!oneRm}
-          abs={absText(f, oneRm?.id ?? null, refValues)} disabled={false} blurOnEnter={false}
-        />
-        <button disabled={add.isPending} className="rounded bg-slate-900 px-3 py-1 text-white disabled:opacity-50">
-          Ajouter
-        </button>
-      </form>
-      {matches.length > 0 && (
-        <ul className="mt-1 w-64 rounded border bg-white text-sm">
-          {matches.map((m) => (
-            <li key={m.id}>
-              <button type="button" className="block w-full px-2 py-1 text-left hover:bg-slate-100" onClick={() => pick(m)}>
-                {m.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {err && <p role="alert" className="mt-1 text-sm text-red-600">{err}</p>}
-    </div>
   )
 }
