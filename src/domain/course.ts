@@ -5,7 +5,7 @@ export type CoursePrescription = Extract<Prescription, { mode: 'course' }>
 export type CourseResult = { ok: true; value: CoursePrescription } | { ok: false; error: string }
 export type TargetUnit = 'm' | 'km' | 'min'
 export type IntensityKind = 'none' | 'pace' | 'speed' | 'percent_mas' | 'hr' | 'rpe'
-export type RecoveryKind = 'none' | 'jog' | 'walk' | 'rest'
+export type RecoveryKind = 'none' | 'ef' | 'active' | 'walk' | 'rest'
 
 export type CourseFields = {
   repeats: string
@@ -15,14 +15,15 @@ export type CourseFields = {
   intensityValue: string
   recoveryKind: RecoveryKind
   recoveryValue: string
+  recoverySpeed: string
 }
 
-export const RECOVERY_LABEL = { jog: 'trot', walk: 'marche', rest: 'arrêt' } as const
+export const RECOVERY_LABEL = { ef: 'EF', active: 'active', jog: 'EF', walk: 'marche', rest: 'arrêt' } as const
 
 export function defaultCourseFields(): CourseFields {
   return {
     repeats: '1', targetUnit: 'm', targetValue: '',
-    intensityKind: 'none', intensityValue: '', recoveryKind: 'none', recoveryValue: '',
+    intensityKind: 'none', intensityValue: '', recoveryKind: 'none', recoveryValue: '', recoverySpeed: '',
   }
 }
 
@@ -84,6 +85,7 @@ export function intensitySpeed(
 /**
  * Durée et distance d'une ligne. En course à pied, sans vitesse prescrite, l'allure de footing (s/km)
  * est une hypothèse. Hors course à pied, aucune hypothèse : la valeur inconnue n'est pas comptée (`incomplete`).
+ * Une récupération active avec vitesse ajoute sa distance (prescrite, sans hypothèse).
  */
 export function courseTotals(
   p: CoursePrescription, refs: ReferenceValue[], footingSecPerKm: number, running: boolean,
@@ -93,11 +95,13 @@ export function courseTotals(
   const ms = kmh === null ? null : kmh / 3.6
   const t = p.target
   const rec = p.recovery?.durationSeconds ?? 0
+  const recMeters =
+    p.recovery?.kind === 'active' && p.recovery.speedKmh !== undefined ? (rec * p.recovery.speedKmh) / 3.6 : 0
   const workSeconds = t.type === 'duration_s' ? t.value : ms === null ? 0 : t.value / ms
   const workMeters = t.type === 'distance_m' ? t.value : ms === null ? 0 : t.value * ms
   return {
     seconds: p.repeats * workSeconds + Math.max(0, p.repeats - 1) * rec,
-    meters: running ? p.repeats * workMeters : 0,
+    meters: running ? p.repeats * workMeters + Math.max(0, p.repeats - 1) * recMeters : 0,
     distanceEstimated: running && t.type === 'duration_s' && (!s || s.estimated),
     incomplete: t.type === 'distance_m' && ms === null,
   }
@@ -118,7 +122,11 @@ export function describeCourse(p: CoursePrescription, refs: ReferenceValue[]): s
     else if (i.unit === 'rpe') parts.push(`RPE ${i.value}`)
     else parts.push(`${i.value}% VMA (${percentMasText(i.value, i.referenceId, refs)})`)
   }
-  if (p.recovery) parts.push(`récup ${fmtClock(p.recovery.durationSeconds)} ${RECOVERY_LABEL[p.recovery.kind]}`)
+  const r = p.recovery
+  if (r) {
+    const speed = r.speedKmh !== undefined ? ` ${r.speedKmh} km/h` : ''
+    parts.push(`récup ${fmtClock(r.durationSeconds)} ${RECOVERY_LABEL[r.kind]}${speed}`)
+  }
   return parts.join('  ·  ')
 }
 
@@ -126,6 +134,7 @@ export function courseToFields(p: CoursePrescription): CourseFields {
   const t = p.target
   const km = t.type === 'distance_m' && t.value >= 2000 && t.value % 1000 === 0
   const i = p.intensity
+  const rk = p.recovery?.kind
   return {
     repeats: String(p.repeats),
     targetUnit: t.type === 'duration_s' ? 'min' : km ? 'km' : 'm',
@@ -136,8 +145,9 @@ export function courseToFields(p: CoursePrescription): CourseFields {
       : i.unit === 'percent_mas' ? 'percent_mas'
       : i.unit === 'hr_bpm' ? 'hr' : 'rpe',
     intensityValue: !i ? '' : i.unit === 'pace_s_per_km' ? fmtClock(i.value) : String(i.value),
-    recoveryKind: p.recovery ? p.recovery.kind : 'none',
+    recoveryKind: !rk ? 'none' : rk === 'jog' ? 'ef' : rk,
     recoveryValue: p.recovery ? fmtClock(p.recovery.durationSeconds) : '',
+    recoverySpeed: p.recovery?.speedKmh !== undefined ? String(p.recovery.speedKmh) : '',
   }
 }
 
@@ -199,7 +209,17 @@ export function courseFromFields(f: CourseFields, masRefId: string | null, base?
   if (f.recoveryKind !== 'none') {
     const s = parseClock(f.recoveryValue) ?? (/^\d+$/.test(f.recoveryValue.trim()) ? Number(f.recoveryValue) : null)
     if (s === null) return fail('Récup : secondes (90) ou min:sec (2:00)')
-    recovery = { kind: f.recoveryKind, durationSeconds: s }
+    let speedKmh: number | undefined
+    if (f.recoveryKind === 'active') {
+      const v = dec(f.recoverySpeed)
+      if (v === null || v <= 0 || v > 40) return fail('Récup active : vitesse en km/h (10)')
+      speedKmh = v
+    }
+    recovery = {
+      kind: f.recoveryKind,
+      durationSeconds: s,
+      ...(speedKmh !== undefined ? { speedKmh } : {}),
+    }
   }
 
   const res = coursePrescription.safeParse({

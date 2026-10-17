@@ -3,24 +3,55 @@ import { useAddExercise } from '../athletes/builder'
 import type { ExerciseOption } from '../athletes/references'
 import type { BlockKind } from '../domain/block'
 import { courseFromFields, defaultCourseFields, latestMas, type CourseFields } from '../domain/course'
+import { defaultLibreFields, libreFromFields, type LibreFields } from '../domain/libre'
 import { lineProfile } from '../domain/lineProfile'
 import { defaultMobilityFields, mobilityFromFields, type MobilityFields } from '../domain/mobility'
-import { MODE_LABEL, POOLS, modeForMovement, type LineMode } from '../domain/modes'
+import { MODE_LABEL, NO_EXERCISE, POOLS, modeForMovement, type LineMode } from '../domain/modes'
+import { defaultPowerFields, powerFromFields, type PowerFields } from '../domain/power'
 import type { ReferenceValue } from '../domain/prescription'
 import { defaultFields, fromFields, latestOneRm, type ForceFields } from '../domain/prescriptionFields'
+import { defaultRecoveryFields, recoveryFromFields, type RecoveryFields } from '../domain/recovery'
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 import { COURSE_GRID, CourseCells, CourseHeader, courseAbs } from './CourseFields'
 import { absText, CELL, FieldCells, FieldsHeader, GRID } from './ExerciseFields'
+import { LIBRE_GRID, LibreCells, LibreHeader } from './LibreFields'
 import { MOB_GRID, MobilityCells, MobilityHeader } from './MobilityFields'
+import { POWER_GRID, PowerCells, PowerHeader, powerAbs } from './PowerFields'
+import { REC_GRID, RecoveryCells, RecoveryHeader } from './RecoveryFields'
 
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const FIRST: Record<LineMode, string> = {
   force: 'input[aria-label="Séries"]',
+  puissance: 'input[aria-label="Séries"]',
   course: 'input[aria-label="Nombre de répétitions"]',
   mobilite: 'input[aria-label="Durée"]',
+  recuperation: 'select[aria-label="Modalité"]',
+  libre: 'input[aria-label="Consigne"]',
 }
 const SEARCH = 'input[aria-label="Exercice"]'
+
+export function gridFor(mode: LineMode): string {
+  switch (mode) {
+    case 'course': return COURSE_GRID
+    case 'mobilite': return MOB_GRID
+    case 'puissance': return POWER_GRID
+    case 'recuperation': return REC_GRID
+    case 'libre': return LIBRE_GRID
+    default: return GRID
+  }
+}
+
+export function ModeHeader({ type }: { type: LineMode }) {
+  switch (type) {
+    case 'course': return <CourseHeader />
+    case 'mobilite': return <MobilityHeader />
+    case 'puissance': return <PowerHeader />
+    case 'recuperation': return <RecoveryHeader />
+    case 'libre': return <LibreHeader />
+    default: return <FieldsHeader />
+  }
+}
 
 export function LineAdd({
   blockId, blockKind, organizationId, quality, nextPosition, exercises, refs, refValues, lastType,
@@ -35,41 +66,55 @@ export function LineAdd({
   const [override, setOverride] = useState<LineMode | null>(null)
   const [allExercises, setAllExercises] = useState(false)
   const selected: LineMode = override ?? sessionMode
+  const direct = NO_EXERCISE.includes(selected)
   const movements = POOLS[selected]
   const pool = useMemo(
     () => (movements ? exercises.filter((e) => movements.includes(e.movement_slug ?? '')) : exercises),
     [movements, exercises],
   )
-  const dropdown = !!movements && !allExercises && pool.length > 0
+  const dropdown = !direct && !!movements && !allExercises && pool.length > 0
   const suggestion = (): ExerciseOption | null => {
     const name = override === null ? profile?.suggestion[blockKind] : undefined
     return (dropdown && name ? pool.find((e) => e.name === name) : undefined) ?? null
+  }
+  const modeFor = (slug: string | null): LineMode => {
+    const m = modeForMovement(slug)
+    return m === 'force' && selected === 'puissance' ? 'puissance' : m
   }
 
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<ExerciseOption | null>(suggestion)
   const [ff, setFf] = useState<ForceFields>(defaultFields(false))
+  const [pf, setPf] = useState<PowerFields>(defaultPowerFields())
   const [cf, setCf] = useState<CourseFields>(defaultCourseFields())
   const [mf, setMf] = useState<MobilityFields>(defaultMobilityFields())
+  const [rf, setRf] = useState<RecoveryFields>(defaultRecoveryFields())
+  const [lf, setLf] = useState<LibreFields>(defaultLibreFields())
   const [err, setErr] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const focus = (selector: string) => formRef.current?.querySelector<HTMLElement>(selector)?.focus()
 
-  const mode: LineMode = dropdown ? selected : picked ? modeForMovement(picked.movement_slug) : 'force'
+  const mode: LineMode = direct
+    ? selected
+    : dropdown
+      ? selected
+      : picked
+        ? modeFor(picked.movement_slug)
+        : selected === 'puissance' ? 'puissance' : 'force'
   const allowPace = picked ? picked.movement_slug === 'running' : true
-  const oneRm = picked && mode === 'force' ? latestOneRm(refs, picked.id) : undefined
+  const oneRm = picked && (mode === 'force' || mode === 'puissance') ? latestOneRm(refs, picked.id) : undefined
   const mas = latestMas(refs)
 
   const matches = useMemo(() => {
     const n = normalize(q.trim())
-    if (dropdown || !n || picked) return []
+    if (direct || dropdown || !n || picked) return []
     return exercises.filter((e) => normalize(e.name).includes(n)).slice(0, 6)
-  }, [q, picked, exercises, dropdown])
+  }, [q, picked, exercises, dropdown, direct])
 
   const pick = (e: ExerciseOption) => {
     setPicked(e)
     setQ(e.name)
-    const m: LineMode = dropdown ? selected : modeForMovement(e.movement_slug)
+    const m: LineMode = dropdown ? selected : modeFor(e.movement_slug)
     if (m === 'course') {
       const running = e.movement_slug === 'running'
       setCf((s) =>
@@ -88,6 +133,7 @@ export function LineAdd({
     setPicked(null)
     setQ('')
     setErr(null)
+    if (NO_EXERCISE.includes(m)) setTimeout(() => focus(FIRST[m]), 0)
   }
   const toggleAll = () => {
     setAllExercises((v) => !v)
@@ -98,28 +144,31 @@ export function LineAdd({
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setErr(null)
-    if (!picked) return setErr('Choisissez un exercice.')
+    if (!direct && !picked) return setErr('Choisissez un exercice.')
     const res =
-      mode === 'course'
-        ? courseFromFields(cf, mas?.id ?? null)
-        : mode === 'mobilite'
-          ? mobilityFromFields(mf)
-          : fromFields(ff, oneRm?.id ?? null)
+      mode === 'course' ? courseFromFields(cf, mas?.id ?? null)
+      : mode === 'mobilite' ? mobilityFromFields(mf)
+      : mode === 'puissance' ? powerFromFields(pf, oneRm?.id ?? null)
+      : mode === 'recuperation' ? recoveryFromFields(rf)
+      : mode === 'libre' ? libreFromFields(lf)
+      : fromFields(ff, oneRm?.id ?? null)
     if (!res.ok) return setErr(res.error)
     try {
       await add.mutateAsync({
-        blockId, organizationId, exerciseId: picked.id, position: nextPosition, prescription: res.value,
+        blockId, organizationId, exerciseId: direct ? null : picked?.id ?? null,
+        position: nextPosition, prescription: res.value,
       })
-      setQ(''); setFf(defaultFields(false)); setCf(defaultCourseFields()); setMf(defaultMobilityFields())
+      setQ('')
+      setFf(defaultFields(false)); setPf(defaultPowerFields()); setCf(defaultCourseFields())
+      setMf(defaultMobilityFields()); setRf(defaultRecoveryFields()); setLf(defaultLibreFields())
       setPicked(suggestion())
-      setTimeout(() => focus(dropdown ? FIRST[mode] : SEARCH), 0)
+      setTimeout(() => focus(direct || dropdown ? FIRST[mode] : SEARCH), 0)
     } catch (x) {
       setErr(errMsg(x))
     }
   }
 
   const showHeader = lastType !== mode
-  const grid = mode === 'course' ? COURSE_GRID : mode === 'mobilite' ? MOB_GRID : GRID
 
   return (
     <div className="mt-2">
@@ -133,16 +182,16 @@ export function LineAdd({
             {(Object.keys(MODE_LABEL) as LineMode[]).map((m) => <option key={m} value={m}>{MODE_LABEL[m]}</option>)}
           </select>
         </label>
-        {movements && (
+        {movements && !direct && (
           <button type="button" className="underline" onClick={toggleAll}>
             {allExercises ? 'Exercices du type' : 'Tous les exercices'}
           </button>
         )}
       </div>
-      {showHeader && (mode === 'course' ? <CourseHeader /> : mode === 'mobilite' ? <MobilityHeader /> : <FieldsHeader />)}
-      <form ref={formRef} onSubmit={submit} className={grid}>
+      {showHeader && <ModeHeader type={mode} />}
+      <form ref={formRef} onSubmit={submit} className={gridFor(mode)}>
         <span />
-        {dropdown ? (
+        {direct ? null : dropdown ? (
           <select
             aria-label="Exercice" className={CELL} value={picked?.id ?? ''}
             onChange={(e) => {
@@ -170,6 +219,15 @@ export function LineAdd({
           />
         ) : mode === 'mobilite' ? (
           <MobilityCells f={mf} set={(patch) => setMf({ ...mf, ...patch })} disabled={false} blurOnEnter={false} />
+        ) : mode === 'puissance' ? (
+          <PowerCells
+            f={pf} set={(patch) => setPf({ ...pf, ...patch })} percentAvailable={!!oneRm}
+            abs={powerAbs(pf, oneRm?.id ?? null, refValues)} disabled={false} blurOnEnter={false}
+          />
+        ) : mode === 'recuperation' ? (
+          <RecoveryCells f={rf} set={(patch) => setRf({ ...rf, ...patch })} disabled={false} blurOnEnter={false} />
+        ) : mode === 'libre' ? (
+          <LibreCells f={lf} set={(patch) => setLf({ ...lf, ...patch })} disabled={false} blurOnEnter={false} />
         ) : (
           <FieldCells
             f={ff} set={(patch) => setFf({ ...ff, ...patch })} percentAvailable={!!oneRm}
