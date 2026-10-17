@@ -90,3 +90,10 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Sélecteur « Type de ligne » à l'ajout : force, course, mobilité. La qualité de la séance donne le type par défaut ; un exercice choisi par recherche impose le mode de son mouvement (running : course, mobility : mobilité, autres : force).
 - Mobilité : durée (s), répétitions, respirations, côté ; au moins un des trois premiers. Durée estimée : durée prescrite, sinon répétitions × secondes par répétition, sinon respirations × 5 s (hypothèse affichée) ; multipliée par 2 pour « les deux côtés » (enchaînés).
 - Le contexte d'un bloc de mobilité (avant, après, récupération, amplitude, technique) est stocké dans `workout_blocks.params`.
+
+## Builder : puissance, récupération, libre (4e)
+- Modes ajoutés : puissance (séries, répétitions ou contacts, charge facultative, vitesse cible, perte de vitesse max, hauteur, récupération obligatoire, RPE), recuperation (modalité, tours, durée par tour, RPE max, température), libre (consigne, durée, RPE cible).
+- Les lignes `recuperation` et `libre` n'ont pas d'exercice : `workout_exercises.exercise_id` est nullable, la contrainte `workout_exercises_exercise_required` limite ce cas à ces deux modes.
+- Durée estimée : puissance = séries × (répétitions × secondes par répétition + récupération) ; récupération = tours × durée par tour ; libre = durée saisie.
+- Blocs proposés par qualité : force, puissance, course, conditioning, mobilité, récupération, autre ; « Tous les types de blocs » déplie la liste complète.
+- Course : récupération EF, active (vitesse en km/h obligatoire, distance ajoutée à la distance de course), marche, arrêt. Chaque ligne affiche un badge de son mode.

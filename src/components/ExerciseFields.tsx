@@ -1,3 +1,4 @@
+import { CodeCell } from './ModeBadge'
 import { useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
 import { absoluteLoadKg, type ReferenceValue } from '../domain/prescription'
@@ -8,7 +9,7 @@ import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 
 export const GRID =
-  'grid grid-cols-[2rem_minmax(9rem,1fr)_4rem_5rem_14rem_4rem_5rem_5rem_8rem_6rem] items-start gap-2'
+  'grid grid-cols-[6rem_minmax(9rem,1fr)_4rem_5rem_14rem_4rem_5rem_5rem_8rem_6rem] items-start gap-2'
 export const CELL = 'w-full rounded border px-2 py-1 text-sm'
 
 const INTENTION_LABEL: Record<string, string> = {
@@ -100,7 +101,7 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
   const upd = useUpdateExercise()
   const del = useDeleteExercise()
   const p = forceOfPrescription(ex.prescription)
-  const oneRm = latestOneRm(refs, ex.exercise_id)
+  const oneRm = ex.exercise_id ? latestOneRm(refs, ex.exercise_id) : undefined
   const stored = p?.load.type === 'percent_reference' ? p.load.referenceId : null
   const refId = stored ?? oneRm?.id ?? null
   const [initial] = useState<ForceFields | null>(() => (p ? toFields(p) : null))
@@ -139,7 +140,7 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
   return (
     <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={GRID}>
-        <span className="pt-1 font-mono text-slate-500">{code}</span>
+        <CodeCell code={code} mode="force" />
         <span className="pt-1 font-medium">{name}</span>
         <FieldCells
           f={f} set={(patch) => setF({ ...f, ...patch })} percentAvailable={!!refId}

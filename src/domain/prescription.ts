@@ -83,8 +83,9 @@ export const coursePrescription = z.object({
   intensity: paceTarget.optional(),
   recovery: z
     .object({
-      kind: z.enum(["jog", "walk", "rest"]),
+      kind: z.enum(["ef", "active", "jog", "walk", "rest"]),
       durationSeconds: z.number().int().min(0),
+      speedKmh: z.number().positive().max(40).optional(),
     })
     .optional(),
   ...base,
@@ -110,11 +111,50 @@ export const mobilityPrescription = z.object({
   ...base,
 });
 
+export const puissancePrescription = z.object({
+  mode: z.literal("puissance"),
+  sets: positiveInt,
+  reps: positiveInt,
+  unit: z.enum(["reps", "contacts"]).default("reps"),
+  load: loadSchema.optional(),
+  targetVelocity: z.number().positive().max(10).optional(),
+  maxVelocityLossPercent: z.number().min(1).max(60).optional(),
+  heightCm: z.number().positive().max(300).optional(),
+  restSeconds: z.number().int().min(0).max(900),
+  rpe: rpeSchema.optional(),
+  ...base,
+});
+
+export const recoveryModalities = [
+  "walk", "easy_run", "easy_bike", "swim", "self_massage", "stretching", "sauna", "cold_bath", "other",
+] as const;
+
+export const recuperationPrescription = z.object({
+  mode: z.literal("recuperation"),
+  modality: z.enum(recoveryModalities),
+  rounds: positiveInt.default(1),
+  roundMinutes: z.number().positive().max(600),
+  maxRpe: rpeSchema.optional(),
+  temperatureC: z.number().min(0).max(120).optional(),
+  ...base,
+});
+
+export const librePrescription = z.object({
+  mode: z.literal("libre"),
+  instruction: z.string().trim().min(1).max(500),
+  durationMinutes: z.number().positive().max(600).optional(),
+  targetRpe: rpeSchema.optional(),
+  ...base,
+});
+
 export const prescriptionSchema = z.discriminatedUnion("mode", [
   forcePrescription,
   coursePrescription,
   conditioningPrescription,
   mobilityPrescription,
+  puissancePrescription,
+  recuperationPrescription,
+  librePrescription,
 ]);
 
 export type Prescription = z.infer<typeof prescriptionSchema>;

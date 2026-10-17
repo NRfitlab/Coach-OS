@@ -1,3 +1,4 @@
+import { ModeBadge } from '../components/ModeBadge'
 import { Fragment, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import {
@@ -14,21 +15,28 @@ import { useExercises, useReferences, type ExerciseOption } from '../athletes/re
 import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
 import { BlockContext } from '../components/BlockContext'
-import { CourseHeader, CourseLine } from '../components/CourseFields'
-import { FieldsHeader, FieldsLine } from '../components/ExerciseFields'
-import { LineAdd } from '../components/LineAdd'
-import { MobilityHeader, MobilityLine } from '../components/MobilityFields'
+import { CourseLine } from '../components/CourseFields'
+import { FieldsLine } from '../components/ExerciseFields'
+import { LibreLine } from '../components/LibreFields'
+import { LineAdd, ModeHeader } from '../components/LineAdd'
+import { MobilityLine } from '../components/MobilityFields'
+import { PowerLine } from '../components/PowerFields'
+import { RecoveryLine } from '../components/RecoveryFields'
 import type { Athlete } from '../domain/athlete'
 import { BLOCK_KINDS, BLOCK_LABEL, blockKindsFor } from '../domain/block'
 import { contextOf } from '../domain/blockContext'
-import { courseOf, courseTotals, describeCourse, parseClock } from '../domain/course'
-import { describeMobility, mobilityOf, mobilitySeconds } from '../domain/mobility'
+import { courseOf, courseTotals, parseClock } from '../domain/course'
+import { describeLine } from '../domain/describe'
+import { libreOf, libreSeconds } from '../domain/libre'
+import { mobilityOf, mobilitySeconds } from '../domain/mobility'
 import { modeForMovement, modeOf, type LineMode } from '../domain/modes'
+import { powerOf, powerSeconds } from '../domain/power'
 import type { ReferenceValue } from '../domain/prescription'
 import { forceOfPrescription, latestOneRm } from '../domain/prescriptionFields'
 import {
   describeForce, estimatedSeconds, FORCE_SYNTAX, parseForce, prescriptionToText,
 } from '../domain/prescriptionText'
+import { recoveryOf, recoverySeconds } from '../domain/recovery'
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 import { formatDate } from '../lib/utils'
@@ -58,8 +66,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
   const [text, setText] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const p = forceOf(ex)
-  const c = courseOf(ex.prescription)
-  const m = mobilityOf(ex.prescription)
+  const other = p ? null : describeLine(ex.prescription, refValues)
 
   const startEdit = () => {
     if (!p) return
@@ -70,7 +77,8 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
   const save = async (e: FormEvent) => {
     e.preventDefault()
     const stored = p?.load.type === 'percent_reference' ? p.load.referenceId : null
-    const res = parseForce(text, stored ?? latestOneRm(refs, ex.exercise_id)?.id ?? null, p ?? undefined)
+    const oneRm = ex.exercise_id ? latestOneRm(refs, ex.exercise_id) : undefined
+    const res = parseForce(text, stored ?? oneRm?.id ?? null, p ?? undefined)
     if (!res.ok) return setErr(res.error)
     try {
       await upd.mutateAsync({ id: ex.id, prescription: res.value })
@@ -82,7 +90,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
 
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 text-sm">
-      <span className="w-8 font-mono text-slate-500">{code}</span>
+      <span className="flex w-24 items-center gap-1"><span className="font-mono text-slate-500">{code}</span><ModeBadge mode={typeOf(ex)} /></span>
       <span className="min-w-40 font-medium">{name}</span>
       {editing ? (
         <form onSubmit={save} className="flex flex-1 gap-2">
@@ -94,11 +102,9 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
         <button disabled={!canEdit || !p} onClick={startEdit} className="text-left font-mono disabled:cursor-default">
           {p
             ? describeForce(p, refValues)
-            : c
-              ? `${describeCourse(c, refValues)} (modifiable en vue Champs)`
-              : m
-                ? `${describeMobility(m)} (modifiable en vue Champs)`
-                : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
+            : other
+              ? `${other} (modifiable en vue Champs)`
+              : `Mode « ${String((ex.prescription as { mode?: unknown } | null)?.mode ?? 'inconnu')} » (non modifiable ici)`}
         </button>
       )}
       {canEdit && !editing && (
@@ -246,23 +252,25 @@ function BlockSection({
           const head = view === 'fields' && type !== prev
           prev = type
           const code = `${letter}${j + 1}`
-          const name = names.get(x.exercise_id) ?? 'Exercice inconnu'
+          const name = x.exercise_id ? (names.get(x.exercise_id) ?? 'Exercice inconnu') : ''
           return (
             <Fragment key={view === 'fields' ? `${x.id}:${JSON.stringify(x.prescription)}` : x.id}>
-              {head && (
-                <li aria-hidden>
-                  {type === 'course' ? <CourseHeader /> : type === 'mobilite' ? <MobilityHeader /> : <FieldsHeader />}
-                </li>
-              )}
+              {head && <li aria-hidden><ModeHeader type={type} /></li>}
               {view === 'text' ? (
                 <Line code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
               ) : type === 'course' ? (
                 <CourseLine
                   code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit}
-                  allowPace={runningIds.has(x.exercise_id)}
+                  allowPace={x.exercise_id ? runningIds.has(x.exercise_id) : false}
                 />
               ) : type === 'mobilite' ? (
                 <MobilityLine code={code} ex={x} name={name} canEdit={canEdit} />
+              ) : type === 'puissance' ? (
+                <PowerLine code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
+              ) : type === 'recuperation' ? (
+                <RecoveryLine code={code} ex={x} canEdit={canEdit} />
+              ) : type === 'libre' ? (
+                <LibreLine code={code} ex={x} canEdit={canEdit} />
               ) : (
                 <FieldsLine code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
               )}
@@ -334,27 +342,42 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
   let incomplete = false
   for (const b of blocks) {
     for (const x of b.workout_exercises) {
+      const raw = x.prescription
       const p = forceOf(x)
       if (p) {
         seconds += estimatedSeconds(p, secPerRep)
         if (b.kind !== 'warmup') working += p.sets
         continue
       }
-      const c = courseOf(x.prescription)
+      const c = courseOf(raw)
       if (c) {
         hasCourse = true
-        const t = courseTotals(c, refValues, footingSec, runningIds.has(x.exercise_id))
+        const t = courseTotals(c, refValues, footingSec, x.exercise_id ? runningIds.has(x.exercise_id) : false)
         seconds += t.seconds
         meters += t.meters
         if (t.distanceEstimated) distanceEstimated = true
         if (t.incomplete) incomplete = true
         continue
       }
-      const m = mobilityOf(x.prescription)
+      const m = mobilityOf(raw)
       if (m) {
         hasMobility = true
         seconds += mobilitySeconds(m, secPerRep)
+        continue
       }
+      const pw = powerOf(raw)
+      if (pw) {
+        seconds += powerSeconds(pw, secPerRep)
+        if (b.kind !== 'warmup') working += pw.sets
+        continue
+      }
+      const rc = recoveryOf(raw)
+      if (rc) {
+        seconds += recoverySeconds(rc)
+        continue
+      }
+      const lb = libreOf(raw)
+      if (lb) seconds += libreSeconds(lb)
     }
   }
   const back = `/athletes/${athlete.id}/semaine${w.scheduled_on ? `?s=${mondayOf(w.scheduled_on)}` : ''}`

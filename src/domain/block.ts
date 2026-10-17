@@ -16,10 +16,19 @@ export const BLOCK_LABEL: Record<BlockKind, string> = {
   continuous: 'Footing continu',
 }
 
-const STRENGTH_BLOCKS: readonly BlockKind[] = [
+const DEFAULT_BLOCKS: readonly BlockKind[] = [
   'warmup', 'straight', 'superset', 'circuit', 'emom', 'amrap', 'interval', 'cooldown',
 ]
-const RUNNING_BLOCKS: readonly BlockKind[] = ['warmup', 'drills', 'continuous', 'interval', 'cooldown']
+
+const BY_QUALITY: Record<string, readonly BlockKind[]> = {
+  strength: ['warmup', 'straight', 'superset', 'circuit', 'cooldown'],
+  power: ['warmup', 'straight', 'superset', 'circuit', 'emom', 'cooldown'],
+  running: ['warmup', 'drills', 'continuous', 'interval', 'cooldown'],
+  conditioning: ['warmup', 'amrap', 'emom', 'circuit', 'interval', 'cooldown'],
+  mobility: ['circuit', 'straight', 'cooldown'],
+  recovery: ['circuit', 'continuous', 'cooldown'],
+  other: BLOCK_KINDS,
+}
 
 export const blockKindsFor = (quality: string | null): readonly BlockKind[] =>
-  quality === 'running' ? RUNNING_BLOCKS : STRENGTH_BLOCKS
+  (quality ? BY_QUALITY[quality] : undefined) ?? DEFAULT_BLOCKS

@@ -12,7 +12,7 @@ const SELECT =
 
 const ExerciseRow = z.object({
   id: z.string(),
-  exercise_id: z.string(),
+  exercise_id: z.string().nullable(),
   position: z.number(),
   notes: z.string().nullable(),
   prescription: z.unknown(),
@@ -78,7 +78,7 @@ export const useUpdateBlockParams = () =>
 
 export const useAddExercise = () =>
   useBuilderMutation(async (v: {
-    blockId: string; organizationId: string; exerciseId: string; position: number; prescription: Prescription
+    blockId: string; organizationId: string; exerciseId: string | null; position: number; prescription: Prescription
   }) => {
     const { error } = await supabase
       .from('workout_exercises')

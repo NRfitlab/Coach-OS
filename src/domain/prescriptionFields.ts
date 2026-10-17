@@ -116,3 +116,17 @@ export function fromFields(f: ForceFields, referenceId: string | null, base?: Fo
   })
   return res.success ? { ok: true, value: res.data } : fail(res.error.issues[0]?.message ?? 'Prescription invalide')
 }
+
+export { dec, parseRest }
+
+export function optNum(raw: string, min: number, max: number): number | undefined | 'invalid' {
+  if (!raw.trim()) return undefined
+  const v = dec(raw)
+  return v === null || v < min || v > max ? 'invalid' : v
+}
+
+export function parseRpe(raw: string): number | undefined | 'invalid' {
+  if (!raw.trim()) return undefined
+  const v = dec(raw)
+  return v === null || v < 1 || v > 10 || !Number.isInteger(v * 2) ? 'invalid' : v
+}

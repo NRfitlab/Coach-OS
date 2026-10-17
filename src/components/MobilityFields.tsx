@@ -1,3 +1,4 @@
+import { CodeCell } from './ModeBadge'
 import { useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
 import {
@@ -6,7 +7,7 @@ import {
 import { errMsg } from '../lib/errors'
 import { CELL } from './ExerciseFields'
 
-export const MOB_GRID = 'grid grid-cols-[2rem_minmax(9rem,1fr)_6rem_4rem_6rem_9rem_6rem] items-start gap-2'
+export const MOB_GRID = 'grid grid-cols-[6rem_minmax(9rem,1fr)_6rem_4rem_6rem_9rem_6rem] items-start gap-2'
 
 export function MobilityHeader() {
   return (
@@ -73,7 +74,7 @@ export function MobilityLine({ code, ex, name, canEdit }: {
   return (
     <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={MOB_GRID}>
-        <span className="pt-1 font-mono text-slate-500">{code}</span>
+        <CodeCell code={code} mode="mobilite" />
         <span className="pt-1 font-medium">{name}</span>
         <MobilityCells f={f} set={(patch) => setF({ ...f, ...patch })} disabled={!canEdit} blurOnEnter />
         {canEdit ? (

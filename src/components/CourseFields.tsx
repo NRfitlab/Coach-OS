@@ -8,9 +8,10 @@ import type { ReferenceValue } from '../domain/prescription'
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
 import { CELL } from './ExerciseFields'
+import { CodeCell } from './ModeBadge'
 
 export const COURSE_GRID =
-  'grid grid-cols-[2rem_minmax(9rem,1fr)_4rem_9rem_15rem_11rem_6rem] items-start gap-2'
+  'grid grid-cols-[6rem_minmax(9rem,1fr)_4rem_9rem_15rem_17rem_6rem] items-start gap-2'
 
 const PLACEHOLDER: Record<IntensityKind, string> = {
   none: '', pace: '3:55', speed: '15.3', percent_mas: '105', hr: '165', rpe: '8',
@@ -81,15 +82,20 @@ export function CourseCells({ f, set, masAvailable, allowPace, abs, disabled, bl
       <div className="flex gap-1">
         <select aria-label="Type de récupération" className={`${CELL} ${hasRecovery ? 'w-24' : ''}`} disabled={disabled}
           value={f.recoveryKind}
-          onChange={(e) => set({ recoveryKind: e.target.value as RecoveryKind, recoveryValue: '' })}>
+          onChange={(e) => set({ recoveryKind: e.target.value as RecoveryKind, recoverySpeed: '' })}>
           <option value="none">Aucune</option>
-          <option value="jog">Trot</option>
+          <option value="ef">EF</option>
+          <option value="active">Active</option>
           <option value="walk">Marche</option>
           <option value="rest">Arrêt</option>
         </select>
         {hasRecovery && (
           <input aria-label="Durée de récupération" placeholder="2:00" className={CELL} disabled={disabled}
             value={f.recoveryValue} onChange={(e) => set({ recoveryValue: e.target.value })} onKeyDown={enter} />
+        )}
+        {f.recoveryKind === 'active' && (
+          <input aria-label="Vitesse de récupération" placeholder="km/h" inputMode="decimal" className={CELL} disabled={disabled}
+            value={f.recoverySpeed} onChange={(e) => set({ recoverySpeed: e.target.value })} onKeyDown={enter} />
         )}
       </div>
     </>
@@ -132,7 +138,7 @@ export function CourseLine({ code, ex, name, refs, refValues, canEdit, allowPace
   return (
     <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={COURSE_GRID}>
-        <span className="pt-1 font-mono text-slate-500">{code}</span>
+        <CodeCell code={code} mode="course" />
         <span className="pt-1 font-medium">{name}</span>
         <CourseCells
           f={f} set={(patch) => setF({ ...f, ...patch })} masAvailable={!!refId} allowPace={allowPace}
