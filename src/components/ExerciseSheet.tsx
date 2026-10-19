@@ -159,6 +159,31 @@ export default function ExerciseSheet(props: {
           </Section>
         )}
 
+        <Section title="Démonstration">
+          <ul className="space-y-1 text-sm">
+            <li>
+              <a
+                href={`https://www.youtube.com/@ESCAPhysio/search?query=${encodeURIComponent(e.name_fr ?? e.name)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-700 underline"
+              >
+                Chercher sur la chaîne ESCAPhysio
+              </a>
+            </li>
+            <li>
+              <a
+                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${e.name} exercise`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-700 underline"
+              >
+                Chercher sur YouTube
+              </a>
+            </li>
+          </ul>
+        </Section>
+
         {e.video_url && (
           <Section title="Vidéo">
             <a href={e.video_url} target="_blank" rel="noreferrer" className="text-sm text-blue-700 underline">
