@@ -18,6 +18,7 @@ import {
   labelOf,
 } from '../domain/exerciseLabels'
 import { messageOf } from '../lib/utils'
+import ExerciseSheet from '../components/ExerciseSheet'
 
 type Opt = { value: string; label: string }
 type ReviewFilter = '' | 'todo' | 'validated'
@@ -75,9 +76,11 @@ export default function Exercises() {
   const [level, setLevel] = useState('')
   const [movement, setMovement] = useState('')
   const [review, setReview] = useState<ReviewFilter>('')
+  const [openId, setOpenId] = useState<string | null>(null)
 
   const items = library.data ?? EMPTY_ITEMS
   const reviews = reviewsQuery.data ?? EMPTY_REVIEWS
+  const opened = openId ? items.find((x) => x.id === openId) : undefined
 
   const index = useMemo(() => {
     const m = new Map<string, string>()
@@ -134,6 +137,15 @@ export default function Exercises() {
 
   return (
     <div className="space-y-4">
+      {opened && (
+        <ExerciseSheet
+          exercise={opened}
+          organizationId={membership.organizationId}
+          review={reviews[opened.id]}
+          canReview={membership.role !== 'assistant'}
+          onClose={() => setOpenId(null)}
+        />
+      )}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-semibold">Exercices</h1>
         <p className="text-sm text-slate-500">
@@ -178,7 +190,7 @@ export default function Exercises() {
           {visible.map((e) => (
             <li key={e.id} className="flex items-start justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
-                <p className="font-medium">{e.name_fr ?? e.name}</p>
+                <button type="button" onClick={() => setOpenId(e.id)} className="text-left font-medium hover:underline">{e.name_fr ?? e.name}</button>
                 {e.name_fr && <p className="text-sm text-slate-500">{e.name}</p>}
                 <div className="mt-1 flex flex-wrap gap-1">
                   {e.movement_slug && <Chip>{labelOf(MOVEMENT_LABEL, e.movement_slug)}</Chip>}
