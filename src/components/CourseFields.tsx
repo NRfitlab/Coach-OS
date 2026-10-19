@@ -1,3 +1,4 @@
+import ExerciseInfoButton from './ExerciseInfoButton'
 import { useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
 import {
@@ -139,7 +140,7 @@ export function CourseLine({ code, ex, name, refs, refValues, canEdit, allowPace
     <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={COURSE_GRID}>
         <CodeCell code={code} mode="course" />
-        <span className="pt-1 font-medium">{name}</span>
+        <span className="pt-1 font-medium">{name} {ex.exercise_id && <ExerciseInfoButton exerciseId={ex.exercise_id} />}</span>
         <CourseCells
           f={f} set={(patch) => setF({ ...f, ...patch })} masAvailable={!!refId} allowPace={allowPace}
           abs={courseAbs(f, refId, refValues)} disabled={!canEdit} blurOnEnter

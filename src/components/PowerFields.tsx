@@ -1,3 +1,4 @@
+import ExerciseInfoButton from './ExerciseInfoButton'
 import type { KeyboardEvent } from 'react'
 import type { ExerciseData } from '../athletes/builder'
 import {
@@ -99,7 +100,7 @@ export function PowerLine({ code, ex, name, refs, refValues, canEdit }: {
       code={code} ex={ex} grid={POWER_GRID} canEdit={canEdit}
       initial={powerToFields(p)}
       build={(f) => powerFromFields(f, refId, p)}
-      lead={<span className="pt-1 font-medium">{name}</span>}
+      lead={<span className="pt-1 font-medium">{name} {ex.exercise_id && <ExerciseInfoButton exerciseId={ex.exercise_id} />}</span>}
       render={(f, set) => (
         <PowerCells
           f={f} set={set} percentAvailable={!!refId} abs={powerAbs(f, refId, refValues)}
