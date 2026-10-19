@@ -1,3 +1,4 @@
+import ExerciseInfoButton from './ExerciseInfoButton'
 import { CodeCell } from './ModeBadge'
 import { useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
@@ -130,7 +131,7 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
     return (
       <li className="flex gap-3 border-t py-1 text-sm">
         <span className="w-8 font-mono text-slate-500">{code}</span>
-        <span className="font-medium">{name}</span>
+        <span className="font-medium">{name} {ex.exercise_id && <ExerciseInfoButton exerciseId={ex.exercise_id} />}</span>
         <span className="text-slate-500">Mode « {mode} » (non modifiable ici)</span>
         {canEdit && <button className="ml-auto text-red-600" onClick={() => del.mutate(ex.id)}>Supprimer</button>}
       </li>
@@ -141,7 +142,7 @@ export function FieldsLine({ code, ex, name, refs, refValues, canEdit }: {
     <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={GRID}>
         <CodeCell code={code} mode="force" />
-        <span className="pt-1 font-medium">{name}</span>
+        <span className="pt-1 font-medium">{name} {ex.exercise_id && <ExerciseInfoButton exerciseId={ex.exercise_id} />}</span>
         <FieldCells
           f={f} set={(patch) => setF({ ...f, ...patch })} percentAvailable={!!refId}
           abs={absText(f, refId, refValues)} disabled={!canEdit} blurOnEnter

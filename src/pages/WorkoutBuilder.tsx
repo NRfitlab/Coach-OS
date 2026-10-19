@@ -1,3 +1,4 @@
+import ExerciseInfoButton from '../components/ExerciseInfoButton'
 import { ModeBadge } from '../components/ModeBadge'
 import { Fragment, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
@@ -91,7 +92,7 @@ function Line({ code, ex, name, refs, refValues, canEdit }: {
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 text-sm">
       <span className="flex w-24 items-center gap-1"><span className="font-mono text-slate-500">{code}</span><ModeBadge mode={typeOf(ex)} /></span>
-      <span className="min-w-40 font-medium">{name}</span>
+      <span className="min-w-40 font-medium">{name} {ex.exercise_id && <ExerciseInfoButton exerciseId={ex.exercise_id} />}</span>
       {editing ? (
         <form onSubmit={save} className="flex flex-1 gap-2">
           <input autoFocus className={`${INPUT} flex-1 font-mono`} value={text} onChange={(e) => setText(e.target.value)} />

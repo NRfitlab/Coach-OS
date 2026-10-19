@@ -1,3 +1,4 @@
+import ExerciseInfoButton from './ExerciseInfoButton'
 import { CodeCell } from './ModeBadge'
 import { useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useDeleteExercise, useUpdateExercise, type ExerciseData } from '../athletes/builder'
@@ -75,7 +76,7 @@ export function MobilityLine({ code, ex, name, canEdit }: {
     <li className="border-t py-1 text-sm" onBlur={onBlur}>
       <div className={MOB_GRID}>
         <CodeCell code={code} mode="mobilite" />
-        <span className="pt-1 font-medium">{name}</span>
+        <span className="pt-1 font-medium">{name} {ex.exercise_id && <ExerciseInfoButton exerciseId={ex.exercise_id} />}</span>
         <MobilityCells f={f} set={(patch) => setF({ ...f, ...patch })} disabled={!canEdit} blurOnEnter />
         {canEdit ? (
           <button type="button" className="pt-1 text-left text-red-600" onClick={() => del.mutate(ex.id)}>Supprimer</button>
