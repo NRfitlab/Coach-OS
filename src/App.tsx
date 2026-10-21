@@ -51,6 +51,10 @@ function Layout({ email, membership }: { email: string; membership: Membership }
     <Outlet context={membership} />
   </Suspense>
 </main>
+      <footer className="border-t bg-white px-6 py-3 text-xs text-slate-500">
+        Exercise data by{' '}
+        <a href="https://repdb.co" target="_blank" rel="noreferrer" className="underline">RepDB (repdb.co)</a>
+      </footer>
     </div>
   )
 }
