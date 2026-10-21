@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 import { useAuth } from './auth/context'
 import { useMemberships, type Membership, type Role } from './auth/membership'
 import Login from './pages/Login'
+import ThemeToggle from './components/ThemeToggle'
 import CreateOrganization from './pages/CreateOrganization'
 import Athletes from './pages/Athletes'
 const AthleteNew = lazy(() => import('./pages/AthleteNew'))
@@ -41,6 +42,7 @@ function Layout({ email, membership }: { email: string; membership: Membership }
           <br />
           {membership.organizationName} · {ROLE_LABEL[membership.role]}
         </span>
+        <ThemeToggle />
         <button className="rounded border px-3 py-1 text-sm"
           onClick={() => void supabase.auth.signOut()}>
           Déconnexion
