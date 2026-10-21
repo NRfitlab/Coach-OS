@@ -21,6 +21,8 @@ const LibraryRowSchema = z.object({
   equipment: z.array(z.string()),
   primary_muscles: z.array(z.string()),
   secondary_muscles: z.array(z.string()),
+  image_paths: z.array(z.string()),
+  media_credit: z.string().nullable(),
   video_url: z.string().nullable(),
   animation_url: z.string().nullable(),
   movements: z.union([MovementSchema, z.array(MovementSchema)]).nullable(),
@@ -31,7 +33,7 @@ export type LibraryExercise = Omit<z.infer<typeof LibraryRowSchema>, 'movements'
 }
 
 const LIBRARY_COLUMNS =
-  'id, organization_id, name, name_fr, description, steps, cues, common_mistakes, body_zones, technique, level, unilateral, equipment, primary_muscles, secondary_muscles, video_url, animation_url, movements(slug)'
+  'id, organization_id, name, name_fr, description, steps, cues, common_mistakes, body_zones, technique, level, unilateral, equipment, primary_muscles, secondary_muscles, video_url, animation_url, image_paths, media_credit, movements(slug)'
 
 // Une seule requête pour toute la bibliothèque ; filtres et recherche dans le navigateur.
 export function useExerciseLibrary() {

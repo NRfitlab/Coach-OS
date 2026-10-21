@@ -11,6 +11,7 @@ import {
   labelOf,
 } from '../domain/exerciseLabels'
 import { formatDate, messageOf } from '../lib/utils'
+import ExerciseImages from './ExerciseImages'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -84,6 +85,8 @@ export default function ExerciseSheet(props: {
           ))}
           {e.organization_id && <Chip>Personnalisé</Chip>}
         </div>
+
+        <ExerciseImages paths={e.image_paths} alt={e.name_fr ?? e.name} />
 
         <div className="rounded border bg-slate-50 p-3 text-sm">
           {reviewed ? (
