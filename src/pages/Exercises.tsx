@@ -147,7 +147,7 @@ export default function Exercises() {
         />
       )}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold">Exercices</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Exercices</h1>
         <p className="text-sm text-slate-500">
           {visible.length} fiche{visible.length > 1 ? 's' : ''} sur {items.length} ·{' '}
           {validatedCount} validée{validatedCount > 1 ? 's' : ''}

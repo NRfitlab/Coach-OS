@@ -1,10 +1,10 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, NavLink, Outlet, Route, Routes, useOutletContext } from 'react-router-dom'
+import { Navigate, Outlet, Route, Routes, useOutletContext } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { useAuth } from './auth/context'
 import { useMemberships, type Membership, type Role } from './auth/membership'
 import Login from './pages/Login'
-import ThemeToggle from './components/ThemeToggle'
+import AppShell from './components/AppShell'
 import CreateOrganization from './pages/CreateOrganization'
 import Athletes from './pages/Athletes'
 const AthleteNew = lazy(() => import('./pages/AthleteNew'))
@@ -22,43 +22,7 @@ const ROLE_LABEL: Record<Role, string> = {
 }
 
 function Layout({ email, membership }: { email: string; membership: Membership }) {
-  const link = ({ isActive }: { isActive: boolean }) =>
-    isActive ? 'font-semibold text-slate-900' : 'text-slate-500 hover:text-slate-900'
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="flex items-center gap-6 border-b bg-white px-6 py-3">
-        <span className="font-bold">Coach OS</span>
-        <nav className="flex gap-4 text-sm">
-          <NavLink to="/" end className={link}>Accueil</NavLink>
-          <NavLink to="/athletes" className={link}>Athlètes</NavLink>
-          <NavLink to="/semaine" className={link}>Semaine</NavLink>
-          <NavLink to="/exercices" className={link}>Exercices</NavLink>
-          {membership.role === 'admin' && (
-            <NavLink to="/organisation" className={link}>Organisation</NavLink>
-          )}
-        </nav>
-        <span className="ml-auto text-right text-sm text-slate-500">
-          {email}
-          <br />
-          {membership.organizationName} · {ROLE_LABEL[membership.role]}
-        </span>
-        <ThemeToggle />
-        <button className="rounded border px-3 py-1 text-sm"
-          onClick={() => void supabase.auth.signOut()}>
-          Déconnexion
-        </button>
-      </header>
-      <main className="p-6">
-  <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
-    <Outlet context={membership} />
-  </Suspense>
-</main>
-      <footer className="border-t bg-white px-6 py-3 text-xs text-slate-500">
-        Exercise data by{' '}
-        <a href="https://repdb.co" target="_blank" rel="noreferrer" className="underline">RepDB (repdb.co)</a>
-      </footer>
-    </div>
-  )
+  return <AppShell email={email} membership={membership} roleLabel={ROLE_LABEL[membership.role]} />
 }
 
 function RequireAuth() {
@@ -87,7 +51,7 @@ function Accueil() {
   const membership = useOutletContext<Membership>()
   return (
     <div className="space-y-1">
-      <h1 className="text-xl font-semibold">Accueil</h1>
+      <h1 className="font-display text-3xl font-bold tracking-tight">Accueil</h1>
       <p className="text-slate-600">Organisation : {membership.organizationName}</p>
       <p className="text-slate-600">Rôle : {ROLE_LABEL[membership.role]}</p>
     </div>
@@ -117,7 +81,7 @@ export default function App() {
 />
         <Route path="exercices" element={<Exercises />} />
                 <Route element={<AdminOnly />}>
-          <Route path="organisation" element={<h1 className="text-xl font-semibold">Organisation</h1>} />
+          <Route path="organisation" element={<h1 className="font-display text-3xl font-bold tracking-tight">Organisation</h1>} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

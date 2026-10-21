@@ -21,7 +21,7 @@ export default function CreateOrganization() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6">
-        <h1 className="text-xl font-semibold">Créer votre organisation</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Créer votre organisation</h1>
         <p className="text-sm text-slate-600">
           Votre compte n'appartient à aucune organisation. Créez la vôtre pour commencer.
         </p>

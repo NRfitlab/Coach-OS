@@ -59,7 +59,7 @@ export default function AthleteDetail() {
   return (
     <div className="max-w-2xl space-y-4">
       <Link to="/athletes" className="text-sm text-slate-500 underline">← Athlètes</Link>
-      <h1 className="text-xl font-semibold">{athlete.full_name}</h1>
+      <h1 className="font-display text-3xl font-bold tracking-tight">{athlete.full_name}</h1>
       <Link to={`/athletes/${athlete.id}/semaine`} className="inline-block rounded border bg-white px-3 py-1 text-sm">
         Calendrier
       </Link>

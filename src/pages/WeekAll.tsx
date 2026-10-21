@@ -52,7 +52,7 @@ export default function WeekAll() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Semaine de tous mes athlètes</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Semaine de tous mes athlètes</h1>
         <div className="flex items-center gap-2 text-sm">
           <button className="rounded border bg-white px-2 py-1" onClick={() => go(addDays(monday, -7))}>←</button>
           <span>{dm(monday)} – {dm(addDays(monday, 6))}</span>
