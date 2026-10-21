@@ -118,7 +118,7 @@ export default function AthleteWeek() {
     <div className="space-y-4">
       <Link to={`/athletes/${a.id}`} className="text-sm text-slate-500 underline">← {a.full_name}</Link>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Semaine du {formatDate(monday)}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Semaine du {formatDate(monday)}</h1>
         <button onClick={() => go(-7)} aria-label="Semaine précédente" className="rounded border px-3 py-1 text-sm">◀</button>
         <button onClick={() => setSp({})} className="rounded border px-3 py-1 text-sm">Cette semaine</button>
         <button onClick={() => go(7)} aria-label="Semaine suivante" className="rounded border px-3 py-1 text-sm">▶</button>

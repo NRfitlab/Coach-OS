@@ -14,7 +14,7 @@ export default function AthleteNew() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <h1 className="text-xl font-semibold">Nouvel athlète</h1>
+      <h1 className="font-display text-3xl font-bold tracking-tight">Nouvel athlète</h1>
       <AthleteForm
         submitLabel="Créer l'athlète"
         onCancel={() => navigate('/athletes')}

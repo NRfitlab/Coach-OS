@@ -387,7 +387,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
     <div className="space-y-4">
       <Link to={back} className="text-sm text-slate-500 underline">← Semaine de {athlete.full_name}</Link>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">
+        <h1 className="font-display text-3xl font-bold tracking-tight">
           {w.title}{w.scheduled_on ? ` · ${formatDate(w.scheduled_on)}` : ''}
         </h1>
         <div className="ml-auto inline-flex overflow-hidden rounded border text-sm" role="group" aria-label="Affichage">

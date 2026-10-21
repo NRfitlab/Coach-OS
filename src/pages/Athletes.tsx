@@ -29,7 +29,7 @@ export default function Athletes() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Athlètes</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Athlètes</h1>
         {canCreate && (
           <Link to="/athletes/new" className="rounded bg-slate-900 px-3 py-2 text-sm text-white">
             Nouvel athlète
