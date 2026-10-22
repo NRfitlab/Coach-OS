@@ -97,3 +97,41 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Durée estimée : puissance = séries × (répétitions × secondes par répétition + récupération) ; récupération = tours × durée par tour ; libre = durée saisie.
 - Blocs proposés par qualité : force, puissance, course, conditioning, mobilité, récupération, autre ; « Tous les types de blocs » déplie la liste complète.
 - Course : récupération EF, active (vitesse en km/h obligatoire, distance ajoutée à la distance de course), marche, arrêt. Chaque ligne affiche un badge de son mode.
+
+## 4g — Bibliothèque d'exercices
+
+- **Contenu** : 376 exercices communs (`organization_id` NULL), tous avec `name_fr`, `description`, `steps[]`, `cues[]`, `common_mistakes[]`. Composition : 170 exercices d'origine (rétro-remplis en français), 191 fiches de mobilité par zone du corps (hanche 26, cheville et pied 30, genou 30, bassin et lombaires 30, thoracique 15, cervicales 15, épaule et omoplate 15, coude et poignet 15, corps entier 15) et 15 squats supplémentaires.
+- **Sources** : rédaction originale en français à partir d'exercices usuels et d'anatomie standard. Aucune copie de textes, de vidéos ou de catalogues tiers. Fiabilité estimée à 85 % sur les exercices courants, plus faible sur les variantes rares : toute fiche reste « à relire » jusqu'à validation (voir 4h).
+- **Colonnes de `exercises`** : `name` (anglais, conservé), `name_fr`, `description`, `steps[]`, `cues[]`, `common_mistakes[]`, `body_zones[]`, `technique`, `animation_url`, `media_credit`, `source` (défaut « Coach OS, rédaction originale »), `image_paths[]`.
+- **Vocabulaires contraints** : `level` ∈ beginner / intermediate / advanced ; `body_zones` ⊂ {ankle, foot, knee, hip, pelvis_lumbar, thoracic, cervical, shoulder, scapula, elbow_forearm, wrist_hand, full_body} ; `technique` ∈ {static_stretch, dynamic_stretch, active_mobility, loaded_mobility, pnf, articular_rotation, activation, self_massage}.
+- **Unicité** : index unique sur `lower(name)` par organisation.
+- **Droits** : exercices communs en lecture seule ; écriture réservée aux exercices d'organisation (admin, coach). Personnaliser = dupliquer.
+- **Méthode d'ajout** : lots de 15 fiches, une migration rejouable par lot (`where not exists` sur `lower(name)`), contrôles `wc -l`, `grep -c "^('"`, `awk` sur les apostrophes avant application, vérification SQL après.
+- **Objectif** : 450 fiches de force supplémentaires, par mouvement (ordre : charnière de hanche, fentes, poussées, tractions, le reste).
+
+## 4h — Page Exercices, fiche, validation
+
+- **Page `/exercices`** : recherche sans accents sur le nom anglais et le nom français ; filtres zone du corps, muscle, matériel, niveau, mouvement, statut de validation. La bibliothèque complète est chargée une fois (cache 5 minutes) et filtrée dans le navigateur.
+- **Fiche détaillée** : panneau latéral (description, étapes, consignes, erreurs fréquentes, images, liens de démonstration). Bouton « i » dans chaque ligne du builder (formulaires de force, course, mobilité, puissance et vue Texte).
+- **Statut de validation** : table `exercise_reviews (organization_id, exercise_id, reviewed_by, reviewed_at)`, clé primaire `(organization_id, exercise_id)`. Une ligne = fiche validée par l'organisation ; aucune ligne = « à relire ». Lecture : membres de l'organisation. Écriture : admin et coachs, avec `reviewed_by = auth.uid()`. Pas de mise à jour (retrait puis nouvelle validation). Trigger `trg_review_same_org`. Les assistants consultent sans valider.
+- **Démonstration vidéo** : chaque fiche propose deux liens de recherche (chaîne ESCAPhysio avec le nom français, YouTube avec le nom anglais). Prévu en 4j : table `exercise_media` (photos et liens vidéo propres à l'organisation, calquée sur `exercise_reviews`). Droit à l'image : consentement écrit si un athlète est reconnaissable.
+
+## 4i — Images des exercices (RepDB)
+
+- **Source** : RepDB, version gratuite (650 exercices, WebP 512 px). Licence `LICENSE-DATA.md` v1.0. Attribution « Exercise data by RepDB (repdb.co) » affichée dans la barre latérale.
+- **Conditions confirmées par écrit par RepDB le 20/10/2026** : affichage dans l'application (coach et page athlète) autorisé ; copie des images dans notre propre stockage obligatoire (pas de chargement depuis `exercise-dataset.com`) ; aucune archive publique, navigable ou téléchargeable en masse ; cache hors-ligne par service worker autorisé ; PDF de séance avec images autorisé ; redimensionnement, recadrage et conversion autorisés ; interdits : republier comme jeu de données, dépôt ou API, alimenter un modèle génératif.
+- **Stockage** : bucket Supabase privé `exercise-images` (dossier `repdb/`, 264 fichiers WebP, 5 Mo maximum par fichier, types WebP, JPEG, PNG). Politique de lecture `exercise_images_read` pour les utilisateurs connectés. Adresses signées d'une heure (hook `useExerciseImageUrls`, cache 50 minutes). Aucune image dans le dépôt GitHub public.
+- **Liaison** : colonne `exercises.image_paths`. 148 exercices reliés (99 noms exacts, 18 approximatifs validés, 31 validés à la main), 228 sans image. Les images sont des illustrations générées par IA : contrôle visuel obligatoire, retrait par `update … set image_paths = '{}'` si le geste est faux.
+- **Fichiers de travail** : `~/repdb-work`, hors dépôt. Un nouvel envoi demande une clé secrète temporaire, saisie par `read -rs`, supprimée aussitôt.
+- **Étape 5** : la page athlète à lien à jeton reçoit les adresses signées par l'Edge Function ; le service worker met les images en cache pour la saisie hors-ligne.
+
+## 4k — Direction artistique et accueil
+
+- **Références** : BodyTrack (clair, fond chaud, cartes à bord fin, avatars à initiales, pastilles pastel) et Epilog (vert vif, titres condensés, libellés monospace, grands chiffres, version sombre quasi noire). Aucun texte, logo ni illustration de ces produits n'est repris.
+- **Thèmes** : réglage Système (défaut) / Clair / Sombre pour le coach et pour les athlètes, mémorisé dans `localStorage` (clé `coachos-theme`). Script dans `index.html` posant `data-theme` avant le premier affichage (pas d'éclair) et mettant à jour `theme-color`.
+- **Jetons** (`src/index.css`, Tailwind v4) : `@theme static` redéfinit `white` et `slate-50` à `slate-900` (neutres chauds) ; `html[data-theme="dark"]` redéfinit les mêmes variables et les couleurs des pastilles d'état. Accent `#0d7f4f` en clair, `#3ddc97` en sombre. Bordures par défaut en `slate-300`.
+- **Polices** auto-hébergées (`@fontsource`, aucune requête vers Google) : Inter (texte), Barlow Condensed (titres `h1`, classe `font-display`), JetBrains Mono (libellés, `font-mono`).
+- **Mise en page** : `AppShell`, barre latérale à gauche repliable (clé `coachos-sidebar`) ; sur mobile, barre du haut et tiroir. Entrée « Organisation » réservée à l'admin.
+- **Accueil** (route index, `src/pages/Home.tsx`) : « À traiter cette semaine ». Une séance est « à faire » si elle appartient à la semaine en cours et si sa date est aujourd'hui ou plus tard. Avant l'étape 5, aucun statut « fait » ni « manqué » n'existe ; il se branchera sur le même écran. Cartes par athlète actif triées par prochaine séance ; athlètes actifs sans séance à venir listés avec « Planifier » (assistants : « Calendrier »). Mêmes données et mêmes politiques que `/semaine` (2 requêtes : athlètes, séances de la semaine, cache partagé).
+- **À contrôler** : contrastes du mode sombre et du texte vert avec un outil de contraste (objectif WCAG AA).
+- **À venir** : 4k-2c, refonte écran par écran (cartes à grand rayon, champs à bordure plus marquée, builder plus aéré, Semaine en cartes).
