@@ -12,6 +12,7 @@ const AthleteDetail = lazy(() => import('./pages/AthleteDetail'))
 
 const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
 const WeekAll = lazy(() => import('./pages/WeekAll'))
+const Home = lazy(() => import('./pages/Home'))
 const WorkoutBuilder = lazy(() => import('./pages/WorkoutBuilder'))
 const Exercises = lazy(() => import('./pages/Exercises'))
 
@@ -63,7 +64,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
-        <Route index element={<Accueil />} />
+        <Route index element={<Home />} />
         <Route path="athletes" element={<Athletes />} />
         <Route path="athletes/new" element={<AthleteNew />} />
         <Route path="athletes/:id" element={<AthleteDetail />} />
