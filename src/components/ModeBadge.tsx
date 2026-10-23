@@ -7,6 +7,7 @@ const BADGE: Record<LineMode, { label: string; style: string }> = {
   mobilite: { label: 'Mobil.', style: 'bg-purple-100 text-purple-800' },
   recuperation: { label: 'Récup.', style: 'bg-teal-100 text-teal-800' },
   libre: { label: 'Libre', style: 'bg-slate-100 text-slate-700' },
+  conditioning: { label: 'Cond.', style: 'bg-orange-100 text-orange-800' },
 }
 
 export function ModeBadge({ mode }: { mode: LineMode }) {

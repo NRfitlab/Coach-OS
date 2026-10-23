@@ -16,6 +16,8 @@ import { useExercises, useReferences, type ExerciseOption } from '../athletes/re
 import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
 import { BlockContext } from '../components/BlockContext'
+import { BlockParams } from '../components/BlockParams'
+import { ConditioningLine } from '../components/ConditioningFields'
 import { CourseLine } from '../components/CourseFields'
 import { FieldsLine } from '../components/ExerciseFields'
 import { LibreLine } from '../components/LibreFields'
@@ -26,6 +28,8 @@ import { RecoveryLine } from '../components/RecoveryFields'
 import type { Athlete } from '../domain/athlete'
 import { BLOCK_KINDS, BLOCK_LABEL, blockKindsFor } from '../domain/block'
 import { contextOf } from '../domain/blockContext'
+import { blockSeconds, hasBlockParams } from '../domain/blockParams'
+import { conditioningOf, conditioningSeconds } from '../domain/conditioning'
 import { courseOf, courseTotals, parseClock } from '../domain/course'
 import { describeLine } from '../domain/describe'
 import { libreOf, libreSeconds } from '../domain/libre'
@@ -247,6 +251,9 @@ function BlockSection({
           <button className="ml-auto text-sm text-red-600" onClick={onDelete}>Supprimer le bloc</button>
         )}
       </div>
+      {hasBlockParams(b.kind, quality) && (
+        <BlockParams key={JSON.stringify(b.params)} blockId={b.id} kind={b.kind} params={b.params} canEdit={canEdit} />
+      )}
       <ul>
         {lines.map((x, j) => {
           const type = typeOf(x)
@@ -270,6 +277,8 @@ function BlockSection({
                 <PowerLine code={code} ex={x} name={name} refs={refs} refValues={refValues} canEdit={canEdit} />
               ) : type === 'recuperation' ? (
                 <RecoveryLine code={code} ex={x} canEdit={canEdit} />
+              ) : type === 'conditioning' ? (
+                <ConditioningLine code={code} ex={x} name={name} canEdit={canEdit} />
               ) : type === 'libre' ? (
                 <LibreLine code={code} ex={x} canEdit={canEdit} />
               ) : (
@@ -341,7 +350,10 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
   let hasCourse = false
   let hasMobility = false
   let incomplete = false
+  let condIncomplete = false
+  let blockIncomplete = false
   for (const b of blocks) {
+    const before = seconds
     for (const x of b.workout_exercises) {
       const raw = x.prescription
       const p = forceOf(x)
@@ -377,9 +389,19 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
         seconds += recoverySeconds(rc)
         continue
       }
+      const cd = conditioningOf(raw)
+      if (cd) {
+        const s = conditioningSeconds(cd, secPerRep)
+        if (s === null) condIncomplete = true
+        else seconds += s
+        continue
+      }
       const lb = libreOf(raw)
       if (lb) seconds += libreSeconds(lb)
     }
+    const ov = blockSeconds(b.kind, b.params, w.quality, seconds - before)
+    if (ov === 'missing') blockIncomplete = true
+    else if (ov !== null) seconds = before + ov
   }
   const back = `/athletes/${athlete.id}/semaine${w.scheduled_on ? `?s=${mondayOf(w.scheduled_on)}` : ''}`
 
@@ -427,6 +449,16 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
       {incomplete && (
         <p className="text-sm text-amber-700">
           Durée incomplète : une ligne de vélo, rameur ou ski en distance, sans vitesse, n'est pas comptée.
+        </p>
+      )}
+      {condIncomplete && (
+        <p className="text-sm text-amber-700">
+          Durée incomplète : une ligne conditioning en mètres ou en calories n'a pas de durée et n'est pas comptée.
+        </p>
+      )}
+      {blockIncomplete && (
+        <p className="text-sm text-amber-700">
+          Durée incomplète : renseignez les paramètres des blocs AMRAP, EMOM, For Time, Circuit ou Intervalles.
         </p>
       )}
       {!canEdit && <p className="text-sm text-slate-500">Lecture seule.</p>}

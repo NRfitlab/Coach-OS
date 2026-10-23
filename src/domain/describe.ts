@@ -1,3 +1,4 @@
+import { conditioningOf, describeConditioning } from './conditioning'
 import { courseOf, describeCourse } from './course'
 import { describeLibre, libreOf } from './libre'
 import { describeMobility, mobilityOf } from './mobility'
@@ -13,6 +14,8 @@ export function describeLine(raw: unknown, refs: ReferenceValue[]): string | nul
   if (f) return describeForce(f, refs)
   const c = courseOf(raw)
   if (c) return describeCourse(c, refs)
+  const k = conditioningOf(raw)
+  if (k) return describeConditioning(k)
   const m = mobilityOf(raw)
   if (m) return describeMobility(m)
   const p = powerOf(raw)
