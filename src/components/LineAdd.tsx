@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { useAddExercise } from '../athletes/builder'
 import type { ExerciseOption } from '../athletes/references'
 import type { BlockKind } from '../domain/block'
+import { conditioningFromFields, defaultConditioningFields, type ConditioningFields } from '../domain/conditioning'
 import { courseFromFields, defaultCourseFields, latestMas, type CourseFields } from '../domain/course'
 import { defaultLibreFields, libreFromFields, type LibreFields } from '../domain/libre'
 import { lineProfile } from '../domain/lineProfile'
@@ -13,6 +14,7 @@ import { defaultFields, fromFields, latestOneRm, type ForceFields } from '../dom
 import { defaultRecoveryFields, recoveryFromFields, type RecoveryFields } from '../domain/recovery'
 import type { Reference } from '../domain/reference'
 import { errMsg } from '../lib/errors'
+import { COND_GRID, ConditioningCells, ConditioningHeader } from './ConditioningFields'
 import { COURSE_GRID, CourseCells, CourseHeader, courseAbs } from './CourseFields'
 import { absText, CELL, FieldCells, FieldsHeader, GRID } from './ExerciseFields'
 import { LIBRE_GRID, LibreCells, LibreHeader } from './LibreFields'
@@ -28,6 +30,7 @@ const FIRST: Record<LineMode, string> = {
   mobilite: 'input[aria-label="Durée"]',
   recuperation: 'select[aria-label="Modalité"]',
   libre: 'input[aria-label="Consigne"]',
+  conditioning: 'input[aria-label="Quantité"]',
 }
 const SEARCH = 'input[aria-label="Exercice"]'
 
@@ -37,6 +40,7 @@ export function gridFor(mode: LineMode): string {
     case 'mobilite': return MOB_GRID
     case 'puissance': return POWER_GRID
     case 'recuperation': return REC_GRID
+    case 'conditioning': return COND_GRID
     case 'libre': return LIBRE_GRID
     default: return GRID
   }
@@ -48,6 +52,7 @@ export function ModeHeader({ type }: { type: LineMode }) {
     case 'mobilite': return <MobilityHeader />
     case 'puissance': return <PowerHeader />
     case 'recuperation': return <RecoveryHeader />
+    case 'conditioning': return <ConditioningHeader />
     case 'libre': return <LibreHeader />
     default: return <FieldsHeader />
   }
@@ -79,7 +84,7 @@ export function LineAdd({
   }
   const modeFor = (slug: string | null): LineMode => {
     const m = modeForMovement(slug)
-    return m === 'force' && selected === 'puissance' ? 'puissance' : m
+    return m === 'force' && (selected === 'puissance' || selected === 'conditioning') ? selected : m
   }
 
   const [q, setQ] = useState('')
@@ -90,6 +95,7 @@ export function LineAdd({
   const [mf, setMf] = useState<MobilityFields>(defaultMobilityFields())
   const [rf, setRf] = useState<RecoveryFields>(defaultRecoveryFields())
   const [lf, setLf] = useState<LibreFields>(defaultLibreFields())
+  const [nf, setNf] = useState<ConditioningFields>(defaultConditioningFields())
   const [err, setErr] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const focus = (selector: string) => formRef.current?.querySelector<HTMLElement>(selector)?.focus()
@@ -100,7 +106,7 @@ export function LineAdd({
       ? selected
       : picked
         ? modeFor(picked.movement_slug)
-        : selected === 'puissance' ? 'puissance' : 'force'
+        : selected === 'puissance' || selected === 'conditioning' ? selected : 'force'
   const allowPace = picked ? picked.movement_slug === 'running' : true
   const oneRm = picked && (mode === 'force' || mode === 'puissance') ? latestOneRm(refs, picked.id) : undefined
   const mas = latestMas(refs)
@@ -150,6 +156,7 @@ export function LineAdd({
       : mode === 'mobilite' ? mobilityFromFields(mf)
       : mode === 'puissance' ? powerFromFields(pf, oneRm?.id ?? null)
       : mode === 'recuperation' ? recoveryFromFields(rf)
+      : mode === 'conditioning' ? conditioningFromFields(nf)
       : mode === 'libre' ? libreFromFields(lf)
       : fromFields(ff, oneRm?.id ?? null)
     if (!res.ok) return setErr(res.error)
@@ -161,6 +168,7 @@ export function LineAdd({
       setQ('')
       setFf(defaultFields(false)); setPf(defaultPowerFields()); setCf(defaultCourseFields())
       setMf(defaultMobilityFields()); setRf(defaultRecoveryFields()); setLf(defaultLibreFields())
+      setNf(defaultConditioningFields())
       setPicked(suggestion())
       setTimeout(() => focus(direct || dropdown ? FIRST[mode] : SEARCH), 0)
     } catch (x) {
@@ -226,6 +234,8 @@ export function LineAdd({
           />
         ) : mode === 'recuperation' ? (
           <RecoveryCells f={rf} set={(patch) => setRf({ ...rf, ...patch })} disabled={false} blurOnEnter={false} />
+        ) : mode === 'conditioning' ? (
+          <ConditioningCells f={nf} set={(patch) => setNf({ ...nf, ...patch })} disabled={false} blurOnEnter={false} />
         ) : mode === 'libre' ? (
           <LibreCells f={lf} set={(patch) => setLf({ ...lf, ...patch })} disabled={false} blurOnEnter={false} />
         ) : (

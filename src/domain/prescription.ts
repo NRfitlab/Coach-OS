@@ -93,11 +93,9 @@ export const coursePrescription = z.object({
 
 export const conditioningPrescription = z.object({
   mode: z.literal("conditioning"),
-  format: z.enum(["amrap", "emom", "for_time", "interval"]),
-  durationSeconds: positiveInt.optional(),
-  rounds: positiveInt.optional(),
-  workSeconds: positiveInt.optional(),
-  restSeconds: z.number().int().min(0).optional(),
+  quantityKind: z.enum(["reps", "meters", "calories", "seconds"]),
+  quantity: z.number().int().positive().max(100000),
+  loadKg: z.number().positive().max(1000).optional(),
   rpe: rpeSchema.optional(),
   ...base,
 });
