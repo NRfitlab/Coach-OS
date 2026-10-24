@@ -12,6 +12,7 @@ const AthleteDetail = lazy(() => import('./pages/AthleteDetail'))
 
 const AthleteWeek = lazy(() => import('./pages/AthleteWeek'))
 const WeekAll = lazy(() => import('./pages/WeekAll'))
+const AthleteLinks = lazy(() => import('./pages/AthleteLinks'))
 const Home = lazy(() => import('./pages/Home'))
 const WorkoutBuilder = lazy(() => import('./pages/WorkoutBuilder'))
 const Exercises = lazy(() => import('./pages/Exercises'))
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="athletes" element={<Athletes />} />
         <Route path="athletes/new" element={<AthleteNew />} />
         <Route path="athletes/:id" element={<AthleteDetail />} />
+        <Route path="athletes/:id/liens" element={<AthleteLinks />} />
                 <Route
           path="athletes/:id/semaine"
           element={<Suspense fallback={<p className="text-slate-500">Chargement…</p>}><AthleteWeek /></Suspense>}

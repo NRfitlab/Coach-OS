@@ -16,6 +16,7 @@ import { useExercises, useReferences, type ExerciseOption } from '../athletes/re
 import { useAuth } from '../auth/context'
 import type { Membership } from '../auth/membership'
 import { BlockContext } from '../components/BlockContext'
+import { AssignPanel } from '../components/AssignPanel'
 import { BlockParams } from '../components/BlockParams'
 import { ConditioningLine } from '../components/ConditioningFields'
 import { CourseLine } from '../components/CourseFields'
@@ -461,6 +462,7 @@ function Builder({ athlete, w, refs, exercises, canEdit }: {
           Durée incomplète : renseignez les paramètres des blocs AMRAP, EMOM, For Time, Circuit ou Intervalles.
         </p>
       )}
+      <AssignPanel athlete={athlete} workoutId={w.id} refs={refs} />
       {!canEdit && <p className="text-sm text-slate-500">Lecture seule.</p>}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
