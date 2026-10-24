@@ -63,6 +63,9 @@ export default function AthleteDetail() {
       <Link to={`/athletes/${athlete.id}/semaine`} className="inline-block rounded border bg-white px-3 py-1 text-sm">
         Calendrier
       </Link>
+      <Link to={`/athletes/${athlete.id}/liens`} className="ml-2 inline-block rounded border bg-white px-3 py-1 text-sm">
+        Liens
+      </Link>
       <div className="flex gap-4 border-b text-sm">
         {TABS.filter((t) => !t.managerOnly || canManage).map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}

@@ -32,6 +32,13 @@ export type DetailData = z.infer<typeof DetailSchema>
 export type BlockData = DetailData['workout_blocks'][number]
 export type ExerciseData = BlockData['workout_exercises'][number]
 
+/** Lecture fraîche d'une séance complète (utilisée aussi pour figer un snapshot). */
+export async function fetchWorkoutDetail(workoutId: string): Promise<DetailData | null> {
+  const { data, error } = await supabase.from('workouts').select(SELECT).eq('id', workoutId).maybeSingle()
+  if (error) throw error
+  return DetailSchema.nullable().parse(data)
+}
+
 export function useWorkoutDetail(workoutId: string | undefined) {
   const userId = useAuth().session?.user.id
   return useQuery({
