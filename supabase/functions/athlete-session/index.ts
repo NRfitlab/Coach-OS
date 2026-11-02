@@ -14,7 +14,7 @@ const json = (status: number, body: unknown) =>
   })
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{22}$/
-const MAX_BODY = 1_000_000
+const MAX_BODY = 200_000
 const IMAGE_BUCKET = 'exercise-images'
 const SIGNED_SECONDS = 3600
 const DAY_MS = 86_400_000
@@ -28,8 +28,8 @@ const halfStep = (v: number) => Math.round(v * 2) === v * 2
 
 const SnapshotLite = z.object({
   blocks: z.array(z.object({
-    lines: z.array(z.object({ id: z.string(), exerciseId: z.string().nullable() })),
-  })),
+    lines: z.array(z.object({ id: z.string(), exerciseId: z.string().nullable() })).max(200),
+  })).max(100),
 })
 
 const SetSchema = z.object({
@@ -63,6 +63,24 @@ function clampDate(raw: string | undefined, now: number): string {
   return new Date(t).toISOString()
 }
 
+async function readBody(req: Request, max: number): Promise<string | null> {
+  const reader = req.body?.getReader()
+  if (!reader) return ''
+  const chunks: Uint8Array[] = []
+  let size = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > max) { await reader.cancel(); return null }
+    chunks.push(value)
+  }
+  const buf = new Uint8Array(size)
+  let o = 0
+  for (const c of chunks) { buf.set(c, o); o += c.byteLength }
+  return new TextDecoder().decode(buf)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'method' })
@@ -70,8 +88,8 @@ Deno.serve(async (req) => {
 
   let raw: unknown
   try {
-    const text = await req.text()
-    if (text.length > MAX_BODY) return json(413, { error: 'too_large' })
+    const text = await readBody(req, MAX_BODY)
+    if (text === null) return json(413, { error: 'too_large' })
     raw = JSON.parse(text)
   } catch {
     return json(400, { error: 'bad_json' })
