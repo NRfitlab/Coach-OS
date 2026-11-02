@@ -180,7 +180,8 @@ Deno.serve(async (req) => {
     }
 
     // action === 'save'
-    const alreadyDone = !!a.completed_at || a.status === 'completed'    const validLines = new Set(lite.data.blocks.flatMap((b) => b.lines.map((l) => l.id)))
+    const alreadyDone = !!a.completed_at || a.status === 'completed'    
+    const validLines = new Set(lite.data.blocks.flatMap((b) => b.lines.map((l) => l.id)))
     const unique = new Map<string, (typeof body.sets)[number]>()
     for (const s of body.sets) {
       if (!validLines.has(s.lineId)) return json(400, { error: 'invalid_line' })
