@@ -154,5 +154,23 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - **Snapshot** (`assignments.snapshot`, version 1, immuable par trigger) construit dans le navigateur après lecture fraîche de la séance et attente des enregistrements en cours : titre, date, qualité, durée prévue, blocs (type, paramètres), lignes (identifiant de ligne utilisé comme `snapshot_exercise_id`, exercice, noms anglais et français, prescription), valeurs de référence réellement utilisées (identifiant, type, exercice, valeur, unité, date, méthode). Exclus : notes de séance, de bloc et de ligne, champ `note` des prescriptions, nom de l'athlète. Un champ « Consigne à l'athlète » distinct est prévu. La charge absolue n'est jamais stockée (invariant 2).
 - **Réassignation** : assigner de nouveau une séance crée une nouvelle assignation. Les assignations précédentes du même athlète pour cette séance sont révoquées si leur statut est `assigned`, si le lien est actif et si aucune série n'a été saisie.
 - **Droits** : création, modification et suppression réservées à l'admin et au coach responsable (`can_manage_athlete`) ; création avec `assigned_by = auth.uid()`. Assistants en lecture seule. Suppression refusée dès qu'une série existe (fonction `assignment_has_sets`) ou si l'assignation est commencée ou terminée : révocation seule. La suppression d'un athlète (RGPD) emporte tout par cascade.
-- **États affichés** (écran `/athletes/:id/liens`) : Envoyée, En cours (série saisie ou statut `in_progress`), Terminée, Lien expiré ou révoqué.
+- **États affichés** (écran `/athletes/:id/liens`) : Envoyée, En cours (série saisie ou statut `in_progress`), Terminée (suivie de « · lien clos » quand le lien n'est plus actif), Lien expiré ou révoqué. Sur une assignation terminée dont le lien est actif, le bouton « Révoquer » s'intitule « Clore le lien » (voir 5b).
 - **Base** : index `assignments (organization_id, scheduled_on)` pour la vue « qui a fait sa séance ». Écriture des séries par l'athlète : uniquement par l'Edge Function (5b) ; `performed_sets` n'a aucune politique d'écriture côté client.
+
+## 5b — Edge Function `athlete-session`
+
+**Rôle.** Seul point d'accès de l'athlète (sans compte) à sa séance. Deux actions : `get` (snapshot, séries saisies, images en URLs signées) et `save` (séries, RPE de séance, commentaire, terminaison).
+
+**Authentification.** Jeton aléatoire de 128 bits dans le lien. Seul le hachage SHA-256 est stocké (`assignments.token_hash`). `verify_jwt = false` (`supabase/config.toml`). La fonction utilise la clé de service lue dans l'environnement, jamais dans le dépôt.
+
+**Validité et révocation.** Validité fixée par 5a (fin de journée locale de max(date de la séance, aujourd'hui) + 7 jours). Révoquer ou clore un lien ramène `token_expires_at` à l'instant présent. Le contrôle est le même pour la lecture et l'écriture, quel que soit le statut.
+
+**Règle d'édition (décidée le 02/11/2026).** Après `completed`, l'athlète peut corriger ou ajouter des séries et modifier le RPE et le commentaire, jusqu'à l'expiration ou la révocation. `completed_at` n'est jamais réécrit. Le coach peut clore le lien d'une séance terminée (bouton « Clore le lien »). Limite connue : une correction écrase la valeur précédente, sans historique (une colonne `updated_at` sur `performed_sets` reste à ajouter si la traçabilité l'exige).
+
+**Limites d'entrée.** Corps ≤ 200 000 octets (lecture en flux plafonnée, indépendante de `content-length`). `sets` ≤ 500. Snapshot : ≤ 100 blocs, ≤ 200 lignes par bloc. RPE par demi-point entre 1 et 10. `performedAt` borné entre −30 jours et +5 minutes ; sans `performedAt`, l'heure du serveur est utilisée, donc un client hors ligne doit l'envoyer.
+
+**Idempotence.** Upsert sur (`assignment_id`, `snapshot_exercise_id`, `set_index`).
+
+**Codes de réponse.** 200 : succès. 400 : `bad_request`, `bad_token`, `invalid_line`, `no_sets`, `bad_json`. 404 : `unknown_link`. 405 : `method`. 409 : plus utilisé. 410 : `expired_link`. 413 : `too_large`. 500 : `server`, `config`, `bad_snapshot`.
+
+**Testé le 02/11/2026 sur coach-os-dev (curl).** Méthode refusée, corps trop gros, lecture valide, jeton expiré, jeton mal formé, jeton inexistant, action inconnue, série valide, doublon, ligne inconnue, RPE invalide, terminaison, règle d'édition après terminaison, clôture du lien depuis l'écran. **Non testé** : `no_sets`, `bad_snapshot`, accès concurrents, volume.

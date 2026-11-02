@@ -184,8 +184,8 @@ export function useRevokeAssignment() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('assignments').update({ token_expires_at: new Date().toISOString() })
-        .eq('id', id).is('completed_at', null)
+                .from('assignments').update({ token_expires_at: new Date().toISOString() })
+        .eq('id', id)
         .select('id').single()
       if (error) throw error
     },
