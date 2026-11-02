@@ -180,8 +180,7 @@ Deno.serve(async (req) => {
     }
 
     // action === 'save'
-    if (a.completed_at || a.status === 'completed') return json(409, { error: 'completed' })
-    const validLines = new Set(lite.data.blocks.flatMap((b) => b.lines.map((l) => l.id)))
+    const alreadyDone = !!a.completed_at || a.status === 'completed'    const validLines = new Set(lite.data.blocks.flatMap((b) => b.lines.map((l) => l.id)))
     const unique = new Map<string, (typeof body.sets)[number]>()
     for (const s of body.sets) {
       if (!validLines.has(s.lineId)) return json(400, { error: 'invalid_line' })
@@ -217,13 +216,18 @@ Deno.serve(async (req) => {
     const patch: Record<string, unknown> = {}
     if (body.sessionRpe !== undefined) patch.session_rpe = body.sessionRpe
     if (body.comment !== undefined) patch.athlete_comment = body.comment
-    if (body.complete) {
+    if (body.complete && !alreadyDone) {
       patch.status = 'completed'
       patch.completed_at = new Date().toISOString()
     } else if (rows.length > 0 && a.status === 'assigned') {
       patch.status = 'in_progress'
     }
     if (Object.keys(patch).length > 0) {
+      let q = db.from('assignments').update(patch).eq('id', a.id)
+      if (!alreadyDone) q = q.is('completed_at', null)
+      const { error: ep } = await q
+      if (ep) throw ep
+    }{
       const { error: ep } = await db.from('assignments').update(patch).eq('id', a.id).is('completed_at', null)
       if (ep) throw ep
     }
