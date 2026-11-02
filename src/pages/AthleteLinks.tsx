@@ -71,7 +71,7 @@ export default function AthleteLinks() {
                   <tr key={r.id} className="border-b align-top">
                     <td className="p-2 font-medium">{r.title ?? 'Séance supprimée'}</td>
                     <td className="p-2">{r.scheduled_on ? formatDate(r.scheduled_on) : '—'}</td>
-                    <td className="p-2">{STATE_LABEL[state]}</td>
+                    <td className="p-2">{STATE_LABEL[state]}{done && !active ? ' · lien clos' : ''}</td>
                     <td className="p-2">
                       {r.token_expires_at ? new Date(r.token_expires_at).toLocaleDateString('fr-FR') : '—'}
                     </td>
@@ -85,12 +85,12 @@ export default function AthleteLinks() {
                           Renvoyer
                         </button>
                       )}
-                      {canManage && !done && active && (
+                      {canManage && active && (
                         <button
                           type="button" className="underline" disabled={revoke.isPending}
                           onClick={() => revoke.mutate(r.id)}
                         >
-                          Révoquer
+                          {done ? 'Clore le lien' : 'Révoquer'}
                         </button>
                       )}
                       {canManage && deletable && (
