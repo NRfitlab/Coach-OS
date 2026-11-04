@@ -32,13 +32,34 @@ export const SessionSchema = z.object({
 export type Session = z.infer<typeof SessionSchema>
 export type SetRow = z.infer<typeof SetRowSchema>
 
+export type SetInput = {
+  lineId: string
+  setIndex: number
+  reps?: number
+  loadKg?: number
+  rpe?: number
+  durationS?: number
+  distanceM?: number
+  note?: string
+  performedAt?: string
+}
+
+export type SaveBody = {
+  sets?: SetInput[]
+  sessionRpe?: number | null
+  comment?: string | null
+  complete?: boolean
+}
+
 export type SessionErrorKind = 'expired' | 'unknown' | 'invalid' | 'network' | 'server'
 
 export class SessionError extends Error {
   kind: SessionErrorKind
-  constructor(kind: SessionErrorKind, message: string) {
+  code?: string
+  constructor(kind: SessionErrorKind, message: string, code?: string) {
     super(message)
     this.kind = kind
+    this.code = code
   }
 }
 
@@ -49,19 +70,35 @@ function kindOfStatus(status: number): SessionErrorKind {
   return 'server'
 }
 
-export async function fetchSession(token: string): Promise<Session> {
+async function call(body: unknown): Promise<unknown> {
   let res: Response
   try {
     res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'get', token }),
+      body: JSON.stringify(body),
     })
   } catch {
     throw new SessionError('network', 'Connexion impossible')
   }
-  if (!res.ok) throw new SessionError(kindOfStatus(res.status), `HTTP ${res.status}`)
-  const parsed = SessionSchema.safeParse(await res.json())
+  const json: unknown = await res.json().catch(() => null)
+  if (!res.ok) {
+    const code =
+      json && typeof json === 'object' && 'error' in json && typeof json.error === 'string'
+        ? json.error
+        : undefined
+    throw new SessionError(kindOfStatus(res.status), `HTTP ${res.status}`, code)
+  }
+  return json
+}
+
+export async function fetchSession(token: string): Promise<Session> {
+  const json = await call({ action: 'get', token })
+  const parsed = SessionSchema.safeParse(json)
   if (!parsed.success) throw new SessionError('server', 'Réponse illisible')
   return parsed.data
+}
+
+export async function saveSession(token: string, body: SaveBody): Promise<void> {
+  await call({ action: 'save', token, ...body })
 }
