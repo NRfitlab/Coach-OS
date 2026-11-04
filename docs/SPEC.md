@@ -174,3 +174,14 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 **Codes de réponse.** 200 : succès. 400 : `bad_request`, `bad_token`, `invalid_line`, `no_sets`, `bad_json`. 404 : `unknown_link`. 405 : `method`. 409 : plus utilisé. 410 : `expired_link`. 413 : `too_large`. 500 : `server`, `config`, `bad_snapshot`.
 
 **Testé le 02/11/2026 sur coach-os-dev (curl).** Méthode refusée, corps trop gros, lecture valide, jeton expiré, jeton mal formé, jeton inexistant, action inconnue, série valide, doublon, ligne inconnue, RPE invalide, terminaison, règle d'édition après terminaison, clôture du lien depuis l'écran. **Non testé** : `no_sets`, `bad_snapshot`, accès concurrents, volume.
+## 5c — Écran athlète
+
+- Route `/s/:token` (HashRouter), hors authentification. Appels à la Edge Function `athlete-session` (`get`, `save`).
+- Affichage : séance en liste (blocs, exercices, prescription en texte), images signées, statut.
+- Saisie série par série, pré-remplie avec la prescription (fourchette de répétitions : minimum). Charge en % : calculée depuis la référence datée, étiquetée « estimé » si la référence n'est pas un test direct. Le RPE n'est jamais pré-rempli.
+- Champs par mode : force (rép., charge, RPE) ; puissance (rép. ou contacts, charge, RPE) ; course (distance ou durée, RPE) ; conditioning (quantité selon son type, charge si prescrite, RPE) ; mobilité (durée ou rép.) ; récupération et libre (durée, RPE). Calories stockées dans `note` (« N cal »).
+- « Valider » enregistre une série (`performedAt` = heure du clic, conservé à la mise à jour). « Mettre à jour » corrige une série validée. « + série » ajoute une ligne.
+- Fin de séance : RPE de séance (1 à 10, pas de 0,5, obligatoire) et commentaire ; au moins une série validée. Après la fin, corrections possibles jusqu'à l'expiration ou la clôture du lien (règle A).
+- Erreurs : lien inconnu, invalide, inactif ou clos ; connexion impossible ; valeur refusée.
+- Testé : affichage, validation, mise à jour sans doublon, « + série », fin de séance, corrections après fin, lien clos, largeur 390 px.
+- Non testé ou limites : mode hors ligne et installation PWA (5d) ; calories ; fourchettes de répétitions ; références manquantes ; pas d'annulation d'une série validée ; durée réelle de séance non saisie (la charge séance-RPE × durée n'est pas calculable côté données athlète).
