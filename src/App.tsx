@@ -16,6 +16,7 @@ const AthleteLinks = lazy(() => import('./pages/AthleteLinks'))
 const Home = lazy(() => import('./pages/Home'))
 const WorkoutBuilder = lazy(() => import('./pages/WorkoutBuilder'))
 const Exercises = lazy(() => import('./pages/Exercises'))
+const AthleteSession = lazy(() => import('./pages/AthleteSession'))
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrateur',
@@ -64,6 +65,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route
+  path="/s/:token"
+  element={<Suspense fallback={<p className="p-6 text-slate-500">Chargement…</p>}><AthleteSession /></Suspense>}
+/>
       <Route element={<RequireAuth />}>
         <Route index element={<Home />} />
         <Route path="athletes" element={<Athletes />} />
