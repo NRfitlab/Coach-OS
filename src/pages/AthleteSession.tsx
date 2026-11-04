@@ -1,19 +1,27 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { describeLine } from '../domain/describe'
 import { MODE_LABEL, modeOf } from '../domain/modes'
 import type { ReferenceValue } from '../domain/prescription'
-import {
-  fetchSession,
-  saveSession,
-  SessionError,
-  type Session,
-  type SessionErrorKind,
-  type SetInput,
-  type SetRow,
-} from '../session/api'
+import { fetchSession, SessionError, type Session, type SessionErrorKind, type SetRow } from '../session/api'
 import { draftOfSaved, planOf, sameDraft, toSet, type Draft, type Plan } from '../session/fields'
+import {
+  flush,
+  getSyncStatus,
+  loadCachedSession,
+  overlay,
+  queueFinal,
+  queueSet,
+  saveCachedSession,
+  usePending,
+  useOnline,
+  useSyncStatus,
+  type Final,
+  type Pending,
+  type RowState,
+  type SyncStatus,
+} from '../session/offline'
 
 const MESSAGES: Record<SessionErrorKind, { title: string; text: string }> = {
   expired: { title: 'Lien inactif', text: 'Ce lien n’est plus actif. Demandez-en un nouveau à votre coach.' },
@@ -38,6 +46,7 @@ const BLOCK_LABEL: Record<string, string> = {
 }
 
 const RPE_OPTIONS = Array.from({ length: 19 }, (_, i) => 1 + i * 0.5)
+const COLS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }
 
 function formatDay(iso: string | null): string {
   if (!iso) return ''
@@ -45,17 +54,37 @@ function formatDay(iso: string | null): string {
   return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
-function saveErrorText(e: unknown): string {
-  if (e instanceof SessionError) {
-    if (e.kind === 'expired') return 'Lien clos : rien n’est enregistré. Demandez un nouveau lien à votre coach.'
-    if (e.kind === 'network') return 'Connexion impossible : non enregistré. Réessayez.'
-    if (e.code === 'no_sets') return 'Validez au moins une série avant de terminer.'
-    if (e.kind === 'invalid') return 'Valeur refusée par le serveur.'
+function SyncBanner(props: { pending: Pending; status: SyncStatus; online: boolean }) {
+  const { pending, status, online } = props
+  const n = Object.keys(pending.sets).length + (pending.final ? 1 : 0)
+  const rejected = Object.keys(pending.rejected ?? {}).length
+  let text: string | null = null
+  if (status.state === 'closed') {
+    text = `Lien clos : ${n} élément${n > 1 ? 's' : ''} non envoyé${n > 1 ? 's' : ''}. Contactez votre coach.`
+  } else if (status.state === 'error') {
+    text = status.message ?? 'Envoi refusé par le serveur.'
+  } else if (!online) {
+    text = n > 0 ? `Hors ligne · ${n} à envoyer` : 'Hors ligne'
+  } else if (status.state === 'offline') {
+    text = `Envoi impossible pour le moment · ${n} à envoyer`
+  } else if (status.state === 'sending') {
+    text = 'Envoi en cours…'
+  } else if (n > 0) {
+    text = `${n} à envoyer`
   }
-  return 'Erreur serveur : non enregistré. Réessayez.'
+  if (!text && rejected === 0) return null
+  return (
+    <div role="status" className="sticky top-0 z-10 -mx-4 space-y-1 border-b bg-amber-100 px-4 py-2 text-sm text-amber-900">
+      {text && <p>{text}</p>}
+      {rejected > 0 && (
+        <p>
+          {rejected} série{rejected > 1 ? 's' : ''} refusée{rejected > 1 ? 's' : ''} par le serveur : vérifiez les
+          valeurs et validez à nouveau.
+        </p>
+      )}
+    </div>
+  )
 }
-
-const COLS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }
 
 function SetEditor(props: {
   token: string
@@ -63,18 +92,14 @@ function SetEditor(props: {
   index: number
   plan: Plan
   saved: SetRow | undefined
+  rowState: RowState | undefined
+  onQueued: () => void
 }) {
-  const { token, lineId, index, plan, saved } = props
-  const qc = useQueryClient()
+  const { token, lineId, index, plan, saved, rowState, onQueued } = props
   const [draft, setDraft] = useState<Draft>(() => (saved ? draftOfSaved(saved, plan.fields) : plan.prefill))
   const [localError, setLocalError] = useState<string | null>(null)
 
-  const m = useMutation({
-    mutationFn: (set: SetInput) => saveSession(token, { sets: [set] }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['athlete-session', token] }),
-  })
-
-  const dirty = !saved || !sameDraft(draft, draftOfSaved(saved, plan.fields), plan.fields)
+  const dirty = !saved || rowState === 'rejected' || !sameDraft(draft, draftOfSaved(saved, plan.fields), plan.fields)
 
   function submit() {
     const performedAt = saved ? new Date(saved.performedAt).toISOString() : new Date().toISOString()
@@ -84,10 +109,17 @@ function SetEditor(props: {
       return
     }
     setLocalError(null)
-    m.mutate(r.set)
+    queueSet(token, r.set)
+    onQueued()
   }
 
-  const label = m.isPending ? 'Enregistrement…' : !saved ? 'Valider' : dirty ? 'Mettre à jour' : 'Validée ✓'
+  const label = !saved
+    ? 'Valider'
+    : rowState === 'rejected'
+      ? 'Réessayer'
+      : dirty
+        ? 'Mettre à jour'
+        : 'Validée ✓'
 
   return (
     <div className="space-y-2 rounded-md bg-slate-50 p-2">
@@ -109,19 +141,27 @@ function SetEditor(props: {
       <button
         type="button"
         onClick={submit}
-        disabled={m.isPending || (!!saved && !dirty)}
+        disabled={!!saved && !dirty}
         className="h-11 w-full rounded-md bg-slate-900 text-base font-medium text-white disabled:bg-slate-300 disabled:text-slate-600"
       >
         {label}
       </button>
+      {rowState === 'pending' && !dirty && <p className="text-xs text-amber-700">À envoyer</p>}
+      {rowState === 'rejected' && <p className="text-sm text-red-600">Refusée par le serveur : vérifiez les valeurs.</p>}
       {localError && <p role="alert" className="text-sm text-red-600">{localError}</p>}
-      {m.isError && <p role="alert" className="text-sm text-red-600">{saveErrorText(m.error)}</p>}
     </div>
   )
 }
 
-function LineSets(props: { token: string; lineId: string; plan: Plan; sets: SetRow[] }) {
-  const { token, lineId, plan, sets } = props
+function LineSets(props: {
+  token: string
+  lineId: string
+  plan: Plan
+  sets: SetRow[]
+  states: Record<string, RowState>
+  onQueued: () => void
+}) {
+  const { token, lineId, plan, sets, states, onQueued } = props
   const [extra, setExtra] = useState(0)
   const mine = sets.filter((s) => s.lineId === lineId)
   const maxSaved = mine.reduce((n, s) => Math.max(n, s.setIndex), 0)
@@ -137,11 +177,13 @@ function LineSets(props: { token: string; lineId: string; plan: Plan; sets: SetR
           index={idx}
           plan={plan}
           saved={mine.find((s) => s.setIndex === idx)}
+          rowState={states[`${lineId}:${idx}`]}
+          onQueued={onQueued}
         />
       ))}
       <button
         type="button"
-        onClick={() => setExtra((n) => n + 1 + (rows - plan.sets - extra > 0 ? rows - plan.sets - extra : 0))}
+        onClick={() => setExtra(rows - plan.sets + 1)}
         className="h-10 w-full rounded-md border text-sm text-slate-700"
       >
         + série
@@ -150,23 +192,22 @@ function LineSets(props: { token: string; lineId: string; plan: Plan; sets: SetR
   )
 }
 
-function FinalPanel(props: { token: string; assignment: Session['assignment']; hasSets: boolean }) {
-  const { token, assignment, hasSets } = props
-  const qc = useQueryClient()
-  const done = assignment.status === 'completed'
-  const [rpe, setRpe] = useState(assignment.sessionRpe !== null ? String(assignment.sessionRpe) : '')
-  const [comment, setComment] = useState(assignment.comment ?? '')
-  const [localError, setLocalError] = useState<string | null>(null)
-
-  const m = useMutation({
-    mutationFn: () =>
-      saveSession(token, {
-        sessionRpe: Number(rpe),
-        comment: comment.trim() === '' ? null : comment.trim(),
-        ...(done ? {} : { complete: true }),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['athlete-session', token] }),
+function FinalPanel(props: {
+  token: string
+  assignment: Session['assignment']
+  hasSets: boolean
+  pendingFinal: Final | undefined
+  onQueued: () => void
+}) {
+  const { token, assignment, hasSets, pendingFinal, onQueued } = props
+  const done = assignment.status === 'completed' || pendingFinal?.complete === true
+  const [rpe, setRpe] = useState(() => {
+    const v = pendingFinal?.sessionRpe ?? assignment.sessionRpe
+    return v !== null && v !== undefined ? String(v) : ''
   })
+  const [comment, setComment] = useState(() => pendingFinal?.comment ?? assignment.comment ?? '')
+  const [submitted, setSubmitted] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
 
   function submit() {
     if (rpe === '') {
@@ -178,7 +219,13 @@ function FinalPanel(props: { token: string; assignment: Session['assignment']; h
       return
     }
     setLocalError(null)
-    m.mutate()
+    queueFinal(token, {
+      sessionRpe: Number(rpe),
+      comment: comment.trim() === '' ? null : comment.trim(),
+      complete: assignment.status !== 'completed',
+    })
+    setSubmitted(true)
+    onQueued()
   }
 
   return (
@@ -209,20 +256,52 @@ function FinalPanel(props: { token: string; assignment: Session['assignment']; h
       <button
         type="button"
         onClick={submit}
-        disabled={m.isPending}
-        className="h-12 w-full rounded-md bg-slate-900 text-base font-medium text-white disabled:bg-slate-300"
+        className="h-12 w-full rounded-md bg-slate-900 text-base font-medium text-white"
       >
-        {m.isPending ? 'Enregistrement…' : done ? 'Mettre à jour' : 'Terminer la séance'}
+        {done ? 'Mettre à jour' : 'Terminer la séance'}
       </button>
-      {m.isSuccess && !m.isPending && <p className="text-sm text-green-700">Enregistré.</p>}
+      {pendingFinal ? (
+        <p className="text-sm text-amber-700">Enregistré sur ce téléphone, envoi en attente.</p>
+      ) : (
+        submitted && <p className="text-sm text-green-700">Enregistré.</p>
+      )}
       {localError && <p role="alert" className="text-sm text-red-600">{localError}</p>}
-      {m.isError && <p role="alert" className="text-sm text-red-600">{saveErrorText(m.error)}</p>}
     </section>
   )
 }
 
 function SessionView({ token, data }: { token: string; data: Session }) {
+  const qc = useQueryClient()
   const { assignment, snapshot, sets, images } = data
+  const pending = usePending(token)
+  const status = useSyncStatus()
+  const online = useOnline()
+  const merged = useMemo(() => overlay(sets, pending), [sets, pending])
+
+  const runFlush = useCallback(() => {
+    void flush(token).then((sent) => {
+      if (sent) void qc.invalidateQueries({ queryKey: ['athlete-session', token] })
+    })
+  }, [token, qc])
+
+  useEffect(() => {
+    runFlush()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') runFlush()
+    }
+    const id = window.setInterval(() => {
+      const s = getSyncStatus().state
+      if (s !== 'closed' && s !== 'error') runFlush()
+    }, 20000)
+    window.addEventListener('online', runFlush)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('online', runFlush)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [runFlush])
+
   const refs: ReferenceValue[] = snapshot.references.map((r) => ({
     id: r.id,
     value: r.value,
@@ -231,8 +310,12 @@ function SessionView({ token, data }: { token: string; data: Session }) {
     method: r.method as ReferenceValue['method'],
   }))
 
+  const done = assignment.status === 'completed' || pending.final?.complete === true
+  const statusLabel = done ? 'Terminée' : assignment.status === 'in_progress' || merged.rows.length > 0 ? 'En cours' : 'À faire'
+
   return (
     <main className="mx-auto max-w-md space-y-6 p-4 pb-16">
+      <SyncBanner pending={pending} status={status} online={online} />
       <header className="space-y-1">
         <h1 className="font-display text-3xl font-bold tracking-tight">{snapshot.workout.title}</h1>
         <p className="text-slate-600">
@@ -240,9 +323,8 @@ function SessionView({ token, data }: { token: string; data: Session }) {
           {snapshot.workout.plannedMinutes ? ` · ${snapshot.workout.plannedMinutes} min prévues` : ''}
         </p>
         <p className="text-sm text-slate-500">
-          {assignment.status === 'completed' ? 'Terminée' : assignment.status === 'in_progress' ? 'En cours' : 'À faire'}
-          {' · '}
-          {sets.length} série{sets.length > 1 ? 's' : ''} enregistrée{sets.length > 1 ? 's' : ''}
+          {statusLabel} · {merged.rows.length} série{merged.rows.length > 1 ? 's' : ''} validée
+          {merged.rows.length > 1 ? 's' : ''}
         </p>
       </header>
 
@@ -262,7 +344,15 @@ function SessionView({ token, data }: { token: string; data: Session }) {
                 <li key={line.id} className="space-y-3 rounded-lg border p-3">
                   <div className="flex gap-3">
                     {img && (
-                      <img src={img} alt={name} loading="lazy" className="h-16 w-16 flex-none rounded object-cover" />
+                      <img
+                        src={img}
+                        alt={name}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                        className="h-16 w-16 flex-none rounded object-cover"
+                      />
                     )}
                     <div className="min-w-0 space-y-0.5">
                       <p className="text-xs text-slate-500">{MODE_LABEL[mode]}</p>
@@ -270,7 +360,16 @@ function SessionView({ token, data }: { token: string; data: Session }) {
                       <p className="text-sm text-slate-600">{text ?? 'Prescription non lisible'}</p>
                     </div>
                   </div>
-                  {plan && <LineSets token={token} lineId={line.id} plan={plan} sets={sets} />}
+                  {plan && (
+                    <LineSets
+                      token={token}
+                      lineId={line.id}
+                      plan={plan}
+                      sets={merged.rows}
+                      states={merged.states}
+                      onQueued={runFlush}
+                    />
+                  )}
                 </li>
               )
             })}
@@ -278,7 +377,13 @@ function SessionView({ token, data }: { token: string; data: Session }) {
         </section>
       ))}
 
-      <FinalPanel token={token} assignment={assignment} hasSets={sets.length > 0} />
+      <FinalPanel
+        token={token}
+        assignment={assignment}
+        hasSets={merged.rows.length > 0}
+        pendingFinal={pending.final}
+        onQueued={runFlush}
+      />
     </main>
   )
 }
@@ -287,9 +392,23 @@ export default function AthleteSession() {
   const { token } = useParams<{ token: string }>()
   const q = useQuery({
     queryKey: ['athlete-session', token],
-    queryFn: () => fetchSession(token ?? ''),
+    queryFn: async () => {
+      const t = token ?? ''
+      try {
+        const s = await fetchSession(t)
+        saveCachedSession(t, s)
+        return s
+      } catch (e) {
+        if (e instanceof SessionError && e.kind === 'network') {
+          const cached = loadCachedSession(t)
+          if (cached) return cached
+        }
+        throw e
+      }
+    },
     enabled: !!token,
     retry: false,
+    networkMode: 'always',
   })
 
   if (!token || q.isPending) {

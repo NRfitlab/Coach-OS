@@ -185,3 +185,12 @@ via Edge Function (jeton aléatoire, stocké haché, expiration, limité à une 
 - Erreurs : lien inconnu, invalide, inactif ou clos ; connexion impossible ; valeur refusée.
 - Testé : affichage, validation, mise à jour sans doublon, « + série », fin de séance, corrections après fin, lien clos, largeur 390 px.
 - Non testé ou limites : mode hors ligne et installation PWA (5d) ; calories ; fourchettes de répétitions ; références manquantes ; pas d'annulation d'une série validée ; durée réelle de séance non saisie (la charge séance-RPE × durée n'est pas calculable côté données athlète).
+## 5d-1 — File d'envoi locale
+
+- Toute action de l'athlète (valider, corriger, terminer) est d'abord écrite dans `localStorage` (`coachos:q:<jeton>`), puis envoyée à la fonction `athlete-session`.
+- Envoi au chargement de la page, à l'événement `online`, au retour sur l'onglet et toutes les 20 secondes tant que la file n'est pas vide. L'envoi est idempotent (upsert) : dernière valeur par couple (exercice, série) ; fin de séance envoyée après les séries ; `complete` n'est jamais retiré une fois demandé.
+- Cache de la dernière réponse `get` (`coachos:s:<jeton>`), affiché si le réseau échoue. La requête TanStack Query utilise `networkMode: 'always'` (sinon elle reste en pause hors ligne).
+- Bandeau d'état : hors ligne, envoi impossible, envoi en cours, N à envoyer, lien clos (données conservées sur l'appareil), séries refusées.
+- Série refusée par le serveur (400) : conservée localement, état « Refusée », à corriger et valider à nouveau.
+- Testé (navigateur de bureau, blocage de l'URL de la fonction) : validation hors ligne, persistance après rechargement, dernière valeur gagnante, fin de séance hors ligne, reprise automatique, lien révoqué avec file en attente.
+- Non testé ou limites : rechargement sans aucun réseau (5d-2) ; état « Refusée » ; effacement possible du stockage par Safari après environ 7 jours sans visite (non vérifié) ; images masquées hors ligne ; lien inactif à l'ouverture alors qu'une file existe (aucun message sur les données locales) ; comportement sur téléphone avec le site publié (à refaire après déploiement).
